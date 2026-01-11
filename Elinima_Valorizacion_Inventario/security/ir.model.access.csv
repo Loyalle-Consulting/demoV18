@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id,perm_read,perm_write,perm_create,perm_unlink
+access_stock_valuation_layer_delete,access_stock_valuation_layer_delete,model_stock_valuation_layer,,1,0,0,1
