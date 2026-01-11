@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_picking_form_internal_dispatch" model="ir.ui.view">
+        <field name="name">stock.picking.form.internal.dispatch</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_open_internal_dispatch_wizard"
+                        string="Guía de Despacho (Traslado Interno)"
+                        type="object"
+                        class="btn-primary"
+                        invisible="[('picking_type_code','!=','internal')]"/>
+            </xpath>
+            <xpath expr="//sheet/notebook" position="inside">
+                <page string="DTE Chile">
+                    <group>
+                        <field name="l10n_cl_internal_dispatch"/>
+                        <field name="l10n_cl_internal_dispatch_created" readonly="1"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

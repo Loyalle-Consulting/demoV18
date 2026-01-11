@@ -1,0 +1,172 @@
+<odoo>
+  <template id="delivery_guide_document_valorizada_replace"
+            inherit_id="guia_despacho_valorizada.delivery_guide_document_copy_1_view">
+
+    <!-- Reemplaza toda la página del reporte -->
+    <xpath expr="//div[contains(concat(' ', normalize-space(@class), ' '), ' page ')]" position="replace">
+      <div class="page">
+        <!-- Idioma del reporte como en el base -->
+        <t t-set="o" t-value="o.with_context(lang=o._get_report_lang())"/>
+
+        <!-- ===== Datos del Cliente y Dirección de Entrega ===== -->
+        <t t-set="partner" t-value="o.partner_id or (o.move_ids and o.move_ids[0].partner_id) or False"/>
+        <div class="row mb-4">
+          <div class="col-7">
+            <t t-if="partner">
+              <strong>Cliente</strong>
+              <div t-field="partner.commercial_partner_id"
+                   t-options="{'widget':'contact','fields':['address','name','phone','vat'],'no_marker': True, 'phone_icons': True}"/>
+            </t>
+          </div>
+          <div class="col-5">
+            <t t-if="o.should_print_delivery_address()">
+              <strong>Dirección de entrega</strong>
+              <t t-set="deliv_partner" t-value="(o.move_ids and o.move_ids[0].partner_id) or o.partner_id"/>
+              <div t-field="deliv_partner.commercial_partner_id"
+                   t-options="{'widget':'contact','fields':['address','name','phone'],'no_marker': True, 'phone_icons': True}"/>
+            </t>
+          </div>
+        </div>
+
+        <!-- ===== Detalle valorizado con PRECIO DEL MOVIMIENTO ===== -->
+        <!-- Líneas a valorar: entregada si existe; si no, solicitada -->
+        <t t-set="__val_lines"
+           t-value="o.move_ids_without_package.filtered(lambda m: (m.quantity or m.product_uom_qty))"/>
+
+        <!-- Resolver Unit Price: prioriza precio manual si existe; si no, price_unit -->
+        <t t-set="__get_unit"
+           t-value="lambda m: (getattr(m, 'x_unit_price_manual', False)
+                               or getattr(m, 'x_price_unit_manual', False)
+                               or getattr(m, 'x_price_unit', False)
+                               or getattr(m, 'x_unit_price', False)
+                               or m.price_unit or 0.0)"/>
+
+        <!-- Construir lista [(m, qty, unit, subtotal)] en floats -->
+        <t t-set="__lines_vals"
+           t-value="[( m,
+                      float((m.quantity or 0.0) if (m.quantity or 0.0) else (m.product_uom_qty or 0.0)),
+                      float(__get_unit(m) or 0.0),
+                      float(__get_unit(m) or 0.0) * float((m.quantity or 0.0) if (m.quantity or 0.0) else (m.product_uom_qty or 0.0))
+                    ) for m in __val_lines]"/>
+
+        <t t-if="__lines_vals">
+          <!-- Acumular neto FUERA de la tabla para evitar scope -->
+          <t t-set="__neto" t-value="0.0"/>
+          <t t-foreach="__lines_vals" t-as="lv">
+            <t t-set="__neto" t-value="float(__neto) + float(lv[3])"/>
+          </t>
+
+          <!-- Tabla de líneas -->
+          <table class="table table-bordered table-sm">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th class="text-end">Cantidad</th>
+                <th class="text-end">Precio Unit.</th>
+                <th class="text-end">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr t-foreach="__lines_vals" t-as="lv">
+                <t t-set="m" t-value="lv[0]"/>
+                <t t-set="__qty" t-value="lv[1]"/>
+                <t t-set="__unit" t-value="lv[2]"/>
+                <t t-set="__line_subtotal" t-value="lv[3]"/>
+
+                <td>
+                  <span t-esc="m.product_id.display_name"/>
+                  <t t-if="m.description_picking and m.description_picking not in (m.product_id.name, m.product_id.display_name)">
+                    <br/><small><em><span t-esc="m.description_picking"/></em></small>
+                  </t>
+                </td>
+
+                <td class="text-end">
+                  <span t-out="__qty"/>
+                  <span t-field="m.product_uom" groups="uom.group_uom"/>
+                </td>
+
+                <!-- t-out para aplicar widget monetario -->
+                <td class="text-end">
+                  <span t-out="__unit"
+                        t-options="{'widget':'monetary','display_currency': o.company_id.currency_id}"/>
+                </td>
+                <td class="text-end">
+                  <span t-out="__line_subtotal"
+                        t-options="{'widget':'monetary','display_currency': o.company_id.currency_id}"/>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Totales desde el acumulador -->
+          <t t-set="__iva_rate" t-value="0.19"/> <!-- 19% -->
+          <t t-set="__iva"      t-value="float(__neto) * float(__iva_rate)"/>
+          <t t-set="__total"    t-value="float(__neto) + float(__iva)"/>
+
+          <div class="mt-3">
+            <table class="table table-borderless w-50 ms-auto">
+              <tbody>
+                <tr>
+                  <td class="text-end"><strong>Subtotal Neto</strong></td>
+                  <td class="text-end">
+                    <span t-out="__neto"
+                          t-options="{'widget':'monetary','display_currency': o.company_id.currency_id}"/>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-end"><strong>IVA 19%</strong></td>
+                  <td class="text-end">
+                    <span t-out="__iva"
+                          t-options="{'widget':'monetary','display_currency': o.company_id.currency_id}"/>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-end"><strong>Total</strong></td>
+                  <td class="text-end">
+                    <span t-out="__total"
+                          t-options="{'widget':'monetary','display_currency': o.company_id.currency_id}"/>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Observación -->
+          <p class="mt-2">
+            <em>Observación: Todos los valores presentados en este documento están expresados en pesos chilenos.</em>
+          </p>
+
+          <!-- ===== Timbre SII (imagen binaria) ===== -->
+          <t t-set="__doc" t-value="('l10n_cl_edi_document_ids' in o._fields and o.l10n_cl_edi_document_ids and o.l10n_cl_edi_document_ids[0]) or False"/>
+          <t t-set="__stamp_img" t-value="
+             ('l10n_cl_dte_barcode_img' in o._fields and o.l10n_cl_dte_barcode_img) or
+             ('l10n_cl_edi_barcode_img' in o._fields and o.l10n_cl_edi_barcode_img) or
+             (__doc and 'barcode_img' in __doc._fields and __doc.barcode_img) or
+             (__doc and 'sii_barcode_img' in __doc._fields and __doc.sii_barcode_img) or
+             False"/>
+          <t t-set="__stamp_src" t-value="__stamp_img and ('data:image/png;base64,' + ((__stamp_img.decode() if hasattr(__stamp_img, 'decode') else __stamp_img) or ''))"/>
+
+          <div class="mt-2" style="text-align:left;">
+            <img t-if="__stamp_src" t-att-src="__stamp_src" style="max-height:4cm; max-width:12cm; display:block; margin:0;"/>
+            <div class="mt-1">
+              <strong>Timbre electrónico SII</strong><br/>
+              <span>
+                Resolución Nº:
+                <t t-esc="o.company_id.l10n_cl_dte_resolution_number or ''"/>
+                de Fecha:
+                <t t-esc="o.company_id.l10n_cl_dte_resolution_date or ''"/>
+                Verifique documento en www.sii.cl
+              </span>
+            </div>
+          </div>
+          <!-- ===== Fin timbre ===== -->
+
+        </t>
+
+        <t t-else="">
+          <p><em>No hay líneas para mostrar.</em></p>
+        </t>
+      </div>
+    </xpath>
+  </template>
+</odoo>

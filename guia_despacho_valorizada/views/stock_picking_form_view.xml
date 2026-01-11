@@ -1,0 +1,13 @@
+<odoo>
+  <record id="view_picking_form_inherit_price_unit" model="ir.ui.view">
+    <field name="name">stock.picking.form.inherit.price.unit</field>
+    <field name="model">stock.picking</field>
+    <field name="inherit_id" ref="stock.view_picking_form"/>
+    <field name="arch" type="xml">
+      <!-- Columna "Unit Price" inmediatamente después de Cantidad (Demand) en Operations -->
+      <xpath expr="//page[@name='operations']//field[@name='move_ids_without_package']//list//field[@name='product_uom_qty']" position="after">
+        <field name="price_unit" string="Unit Price"/>
+      </xpath>
+    </field>
+  </record>
+</odoo>
