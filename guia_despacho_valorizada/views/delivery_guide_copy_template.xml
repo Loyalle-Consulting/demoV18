@@ -1,0 +1,148 @@
+<odoo>
+  <template id="delivery_guide_document_copy_1_view">
+<t t-name="l10n_cl_edi_stock.delivery_guide_document_copy_1">
+            <t t-call="web.html_container">
+                <t t-foreach="docs" t-as="o">
+                    <t t-set="custom_header" t-value="'l10n_cl_edi_stock.custom_header'"/>
+                    <t t-call="web.external_layout">
+                        <div class="page">
+                            <div class="row">
+                                <div class="col-12">
+                                    <t t-call="l10n_cl_edi_stock.stock_informations_copy_3"/>
+                                </div>
+                            </div>
+                            <t t-set="prepared_amounts" t-value="o._prepare_pdf_values()"/>
+                            <t t-set="has_unit_price" t-value="prepared_amounts['has_unit_price']"/>
+                            <t t-set="has_discount" t-value="prepared_amounts['has_discount']"/>
+                            <table class="o_has_total_table table table-borderless" t-if="o.move_ids">
+                                <thead>
+                                    <tr>
+                                        <th name="th_code">
+                                            <strong>Code</strong>
+                                        </th>
+                                        <th name="th_product">
+                                            <strong>Product</strong>
+                                        </th>
+                                        <th class="text-end">
+                                            <strong>Quantity</strong>
+                                        </th>
+                                        <th groups="uom.group_uom">
+                                            <strong>UoM</strong>
+                                        </th>
+                                        <th name="unit_price" class="text-end" t-if="has_unit_price">
+                                            <strong>Unit Price</strong>
+                                        </th>
+                                        <th name="discount" class="text-end" t-if="has_discount">
+                                            <strong>Discount</strong>
+                                        </th>
+                                        <th name="subtotal" class="text-end" t-if="has_unit_price">
+                                            <strong>Value</strong>
+                                        </th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    <t t-set="total_line_amounts" t-value="prepared_amounts.get('total_line_amounts', {})"/>
+                                    <t t-set="float_repr" t-value="prepared_amounts['float_repr']"/>
+                                    <t t-foreach="o.move_ids.filtered(lambda x: x.quantity &gt; 0)" t-as="line">
+                                        <t t-set="line_amounts" t-value="total_line_amounts.get(line, {})"/>
+                                        <tr>
+                                            <td>
+                                                <span t-field="line.product_id.default_code"/>
+                                            </td>
+                                            <td>
+                                                <span t-field="line.product_id.name"/>
+                                                <br/>
+                                                <span t-field="line.product_id.description_picking"/>
+                                            </td>
+                                            <td class="text-end">
+                                                <span t-field="line.quantity"/>
+                                            </td>
+                                            <td groups="uom.group_uom">
+                                                <span t-field="line.product_uom"/>
+                                            </td>
+
+                                            <td class="text-end" t-if="has_unit_price">
+                                                <span t-out="float_repr(line_amounts.get('price_unit', False), 2)"/>
+                                            </td>
+                                            <td class="text-end" t-if="has_discount">
+                                                <span t-out="line_amounts.get('total_discount_fl', 0.0)" t-options="{'widget': 'monetary', 'display_currency': o.company_id.currency_id}"/>
+                                            </td>
+                                            <td class="text-end" t-if="has_unit_price">
+                                                <span t-out="line_amounts.get('total_amount', 0.0)" t-options="{'widget': 'monetary', 'display_currency': o.company_id.currency_id}"/>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                            <div class="clearfix">
+                                <div id="total" class="row mt-n3">
+                                    <t t-set="amounts" t-value="prepared_amounts.get('amounts', {})"/>
+                                    <t t-set="withholdings" t-value="prepared_amounts.get('withholdings', {})"/>
+                                    <div t-attf-class="#{'col-6' if report_type != 'html' else 'col-sm-7 col-md-6'} ms-auto">
+                                        <table class="o_total_table table table-borderless" style="page-break-inside: avoid;">
+                                            <tr t-if="amounts.get('subtotal_amount_taxable', False)" class="o_subtotal">
+                                                <td>
+                                                    <strong>Subtotal Neto</strong>
+                                                </td>
+                                                <td class="text-end">
+                                                    <span t-out="amounts.get('subtotal_amount_taxable', 0)" t-options="{'widget': 'monetary', 'display_currency': o.company_id.currency_id}"/>
+                                                </td>
+                                            </tr>
+                                            <tr t-if="amounts.get('subtotal_amount_exempt', False)" class="o_subtotal">
+                                                <td>
+                                                    <strong>Subtotal Exento</strong>
+                                                </td>
+                                                <td class="text-end">
+                                                    <span t-out="amounts.get('subtotal_amount_exempt', 0)" t-options="{'widget': 'monetary', 'display_currency': o.company_id.currency_id}"/>
+                                                </td>
+                                            </tr>
+                                            <tr t-if="amounts.get('vat_percent', False)" class="o_subtotal">
+                                                <td>
+                                                    <strong t-out="'IVA %s ' % amounts['vat_percent']"/>
+                                                    <strong>%</strong>
+                                                </td>
+                                                <td class="text-end">
+                                                    <span t-out="amounts.get('vat_amount')" t-options="{'widget': 'monetary', 'display_currency': o.company_id.currency_id}"/>
+                                                </td>
+                                            </tr>
+                                            <t t-foreach="withholdings" t-as="tax">
+                                                <tr>
+                                                    <td>
+                                                        <span class="text-nowrap" t-out="'%s %s' % (tax['tax_name'], tax['tax_percent'])"/>
+                                                        <span>%</span>
+                                                    </td>
+                                                    <td class="text-end o_price_total">
+                                                        <span class="text-nowrap" t-out="tax['tax_amount']" t-options="{'widget': 'monetary', 'display_currency': o.company_id.currency_id}"/>
+                                                    </td>
+                                                </tr>
+                                            </t>
+                                            <tr class="o_total">
+                                                <td>
+                                                    <strong>Total</strong>
+                                                </td>
+                                                <td class="text-end">
+                                                    <span class="text-nowrap" t-out="amounts.get('total_amount')" t-options="{'widget': 'monetary', 'display_currency': o.company_id.currency_id}"/>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-5">
+                                    <t t-call="l10n_cl_edi_stock.barcode_stamp_footer_copy_3"/>
+                                </div>
+                                <div class="col-7 text-justify">
+                                    <br/>
+                                    <p t-field="o.note"/>
+                                </div>
+                            </div>
+
+                        </div>
+                    </t>
+                </t>
+            </t>
+        </t>
+  </template>
+</odoo>
