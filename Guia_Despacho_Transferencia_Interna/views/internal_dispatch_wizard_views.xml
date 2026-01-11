@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_internal_dispatch_wizard_form" model="ir.ui.view">
+        <field name="name">l10n.cl.internal.dispatch.wizard.form</field>
+        <field name="model">l10n_cl.internal.dispatch.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Guía de Despacho (Traslado Interno)" create="false" edit="false">
+                <sheet>
+                    <group>
+                        <field name="picking_id" invisible="1"/>
+                        <field name="receptor_partner_id" options="{'no_create': True}"/>
+                        <field name="dispatch_reason"/>
+                    </group>
+                    <group string="Transporte (opcional)">
+                        <field name="vehicle_plate"/>
+                        <field name="driver_name"/>
+                        <field name="driver_vat"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                    <button name="action_confirm" type="object" string="Crear Guía Electrónica" class="btn-primary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
