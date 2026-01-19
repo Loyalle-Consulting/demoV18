@@ -13,9 +13,9 @@
     "version": "18.0.2.2.4",
     "summary": "Set all relational fields domain by selecting its records unsing `in, not in` operator.",
     "sequence": 10,
-    "author": "Terabits Technolab",
+    "author": "Loyalle Consulting",
     "license": "OPL-1",
-    "website": "https://www.terabits.xyz/apps/18.0/advanced_web_domain_widget",
+    "website": "https://www.grupoloyalle.cl",
     "description": """
       
         """,
