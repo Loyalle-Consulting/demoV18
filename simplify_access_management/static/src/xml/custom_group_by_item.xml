@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates>
+    <t t-name="CustomGroupByItemBits" t-inherit="web.CustomGroupByItem" t-inherit-mode="extension">
+        <xpath expr="//option[@t-foreach='props.fields']" position="attributes">
+            <attribute name="t-if" >!hidden_fields.includes(field.name)</attribute>
+        </xpath>
+    </t> 
+</templates>
