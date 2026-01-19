@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<templates>
+    <t t-name="documentsControlPanelBits" t-inherit="documents.ControlPanel" t-inherit-mode="extension">
+
+        <!-- Add export restriction condition -->
+        <xpath expr="//button[@class='dropdown-item w-100 o_documents_export']" position="attributes">
+            <attribute name="t-if" add="this.restrictionFlags.export" separator=" &amp;&amp; "/>
+        </xpath>
+
+        <!-- Add duplicate restriction condition -->
+        <xpath expr="//button[@t-on-click='() =&gt; this.onDuplicate()']" position="attributes">
+            <attribute name="t-if" add="this.restrictionFlags.duplicate" separator=" &amp;&amp; "/>
+        </xpath>
+        
+    </t> 
+</templates>

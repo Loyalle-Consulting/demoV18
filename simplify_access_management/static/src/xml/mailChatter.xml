@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates>
+
+    <t t-name="mailChatterBits" t-inherit="mail.Chatter" t-inherit-mode="extension" >
+        <xpath expr="//button[contains(@class,'o-mail-Chatter-sendMessage')]" position="attributes">
+            <attribute name="t-if">!access.hide_send_mail</attribute>
+        </xpath>
+        <xpath expr="//button[contains(@class,'o-mail-Chatter-logNote')]" position="attributes">
+            <attribute name="t-if">!access.hide_log_notes</attribute>
+        </xpath>
+        <xpath expr="//button[contains(@class,'o-mail-Chatter-activity')]" position="attributes">
+            <attribute name="t-if">props.has_activities &amp;&amp; !access.hide_schedule_activity</attribute>
+        </xpath>
+    </t> 
+</templates>
