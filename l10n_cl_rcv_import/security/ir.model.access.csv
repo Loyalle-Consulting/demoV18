@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_rcv_import,l10n_cl_rcv_import,model_l10n_cl_rcv_import,account.group_account_user,1,1,1,0
+access_rcv_line,l10n_cl_rcv_line,model_l10n_cl_rcv_line,account.group_account_user,1,0,0,0
+access_rcv_log,l10n_cl_rcv_log,model_l10n_cl_rcv_log,account.group_account_manager,1,0,0,0

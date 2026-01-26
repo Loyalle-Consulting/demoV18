@@ -1,0 +1,37 @@
+<odoo>
+    <record id="view_rcv_import_tree" model="ir.ui.view">
+        <field name="name">l10n_cl.rcv.import.tree</field>
+        <field name="model">l10n_cl.rcv.import</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="company_id"/>
+                <field name="month"/>
+                <field name="year"/>
+                <field name="state"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_rcv_import_form" model="ir.ui.view">
+        <field name="name">l10n_cl.rcv.import.form</field>
+        <field name="model">l10n_cl.rcv.import</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="company_id"/>
+                        <field name="month"/>
+                        <field name="year"/>
+                        <field name="state" readonly="1"/>
+                    </group>
+
+                    <notebook>
+                        <page string="RCV">
+                            <field name="line_ids"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>
