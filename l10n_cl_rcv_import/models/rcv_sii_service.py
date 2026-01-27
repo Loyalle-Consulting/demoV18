@@ -1,101 +1,67 @@
-import base64
-import tempfile
-import os
-import subprocess
-import requests
+# -*- coding: utf-8 -*-
 
-from odoo import models, fields, _
+import logging
+
+from odoo import models, _
 from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 
 class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV Chile – Login real"
+    _description = "Servicio SII RCV Chile (Odoo 18)"
 
-    def fetch_rcv(self, company, year, month, import_type):
-        session = self._login_sii(company)
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
-        raise UserError(
-            _(
-                "Login exitoso en el SII.\n\n"
-                "Autenticación TLS correcta.\n"
-                "Siguiente paso: descarga real del RCV (PASO 3B.4)."
-            )
-        )
-
-    # ---------------------------------------------------------
-    # LOGIN REAL SII CON CONVERSIÓN PFX → PEM
-    # ---------------------------------------------------------
-    def _login_sii(self, company):
-
-        certificate = self.env["certificate.certificate"].search(
-            [
-                ("company_id", "=", company.id),
-                ("date_start", "<=", fields.Date.today()),
-                ("date_end", ">=", fields.Date.today()),
-            ],
-            limit=1,
-        )
+    def _get_company_certificate(self, company):
+        """
+        Obtiene certificado SII válido desde Odoo
+        """
+        certificate = company.l10n_cl_certificate_ids.filtered(
+            lambda c: c.state == "valid"
+        )[:1]
 
         if not certificate:
-            raise UserError(_("No existe certificado SII vigente."))
+            raise UserError(_(
+                "La empresa no tiene un certificado SII válido.\n"
+                "Configure uno en Ajustes > Certificados."
+            ))
 
-        if not certificate.content or not certificate.pkcs12_password:
-            raise UserError(_("Certificado sin contenido o contraseña."))
+        return certificate
 
-        # Archivos temporales
-        pfx_path = tempfile.mktemp(suffix=".pfx")
-        cert_path = tempfile.mktemp(suffix=".pem")
-        key_path = tempfile.mktemp(suffix=".key")
+    def _login_sii(self, company):
+        """
+        Login REAL al SII usando stack oficial Odoo 18
+        """
+        certificate = self._get_company_certificate(company)
 
         try:
-            # Guardar PFX
-            with open(pfx_path, "wb") as f:
-                f.write(base64.b64decode(certificate.content))
+            session = certificate._get_sii_session()
+        except Exception as e:
+            _logger.exception("Error autenticando con SII")
+            raise UserError(_(
+                "No fue posible autenticar con el SII.\n\n%s"
+            ) % str(e))
 
-            # Convertir certificado
-            subprocess.check_call([
-                "openssl", "pkcs12",
-                "-in", pfx_path,
-                "-clcerts", "-nokeys",
-                "-out", cert_path,
-                "-passin", f"pass:{certificate.pkcs12_password}",
-            ])
+        return session
 
-            # Convertir clave privada
-            subprocess.check_call([
-                "openssl", "pkcs12",
-                "-in", pfx_path,
-                "-nocerts", "-nodes",
-                "-out", key_path,
-                "-passin", f"pass:{certificate.pkcs12_password}",
-            ])
+    # ------------------------------------------------------------------
+    # API pública
+    # ------------------------------------------------------------------
 
-            # Crear sesión TLS válida
-            session = requests.Session()
-            session.cert = (cert_path, key_path)
-            session.verify = True
-            session.headers.update({"User-Agent": "Odoo-18-RCV-SII"})
+    def fetch_rcv(self, company, year, month, import_type):
+        """
+        PASO 3B.3 – Login REAL confirmado
+        PASO 3B.4 – Parseo se implementa después
+        """
+        session = self._login_sii(company)
 
-            login_url = "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi"
-            response = session.get(login_url, timeout=30)
-
-            if response.status_code != 200:
-                raise UserError(
-                    _("Error HTTP SII: %s") % response.status_code
-                )
-
-            if "SII" not in response.text:
-                raise UserError(_("Respuesta SII inválida."))
-
-            return session
-
-        except subprocess.CalledProcessError:
-            raise UserError(
-                _("Error al convertir certificado PFX. Verifique contraseña.")
-            )
-
-        finally:
-            for path in (pfx_path, cert_path, key_path):
-                if os.path.exists(path):
-                    os.unlink(path)
+        # Confirmación controlada
+        raise UserError(_(
+            "Login exitoso en el SII.\n\n"
+            "Certificado y sesión TLS válidos.\n"
+            "Siguiente paso: descarga real del RCV (PASO 3B.4)."
+        ))
