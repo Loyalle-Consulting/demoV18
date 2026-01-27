@@ -10,34 +10,34 @@ from odoo.exceptions import UserError
 
 class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV Chile – Login y Base Real"
+    _description = "Servicio SII RCV Chile – Login estable Odoo 18"
 
 
     # =========================================================
-    # MÉTODO PRINCIPAL (wizard)
+    # ENTRY POINT DESDE EL WIZARD
     # =========================================================
     def fetch_rcv(self, company, year, month, import_type):
         """
         Punto único de entrada.
-        No vuelve a ramificar flujos → evita loops.
+        NO ramifica flujos → evita loops infinitos.
         """
 
-        session = self._login_sii(company)
+        self._login_sii(company)
 
         raise UserError(
             _(
-                "✔ Login SII REAL exitoso\n"
-                "✔ Certificado válido\n"
+                "✔ Certificado SII validado correctamente\n"
+                "✔ Certificado vigente\n"
                 "✔ Contraseña correcta\n"
-                "✔ Autenticación TLS establecida\n\n"
-                "El consumo REAL del RCV se implementa "
-                "en el PASO 3B.5 (descarga y parseo)."
+                "✔ Autenticación TLS exitosa\n\n"
+                "El consumo REAL del RCV se implementa en el PASO 3B.5\n"
+                "(consulta directa al endpoint oficial del SII RCV)."
             )
         )
 
 
     # =========================================================
-    # LOGIN REAL SII (CORREGIDO ODOO 18)
+    # LOGIN REAL SII (CAMPO CORRECTO pkcs12_password)
     # =========================================================
     def _login_sii(self, company):
 
@@ -53,39 +53,40 @@ class L10nClRcvSiiService(models.AbstractModel):
         if not certificate:
             raise UserError(_("No existe certificado SII vigente."))
 
-        # 🔴 CAMPO CORRECTO EN ODOO 18
-        if not certificate.content or not certificate.password:
-            raise UserError(
-                _("El certificado no tiene contenido o contraseña definida.")
-            )
+        if not certificate.content:
+            raise UserError(_("El certificado no tiene contenido PFX."))
+
+        if not certificate.pkcs12_password:
+            raise UserError(_("El certificado no tiene contraseña definida."))
 
         pfx_path = tempfile.mktemp(suffix=".pfx")
         cert_path = tempfile.mktemp(suffix=".pem")
         key_path = tempfile.mktemp(suffix=".key")
 
         try:
-            # Guardar PFX
+            # Guardar archivo PFX
             with open(pfx_path, "wb") as f:
                 f.write(base64.b64decode(certificate.content))
 
-            # Certificado público
+            # Extraer certificado público
             subprocess.check_call([
                 "openssl", "pkcs12",
                 "-in", pfx_path,
                 "-clcerts", "-nokeys",
                 "-out", cert_path,
-                "-passin", f"pass:{certificate.password}",
+                "-passin", f"pass:{certificate.pkcs12_password}",
             ])
 
-            # Clave privada
+            # Extraer clave privada
             subprocess.check_call([
                 "openssl", "pkcs12",
                 "-in", pfx_path,
                 "-nocerts", "-nodes",
                 "-out", key_path,
-                "-passin", f"pass:{certificate.password}",
+                "-passin", f"pass:{certificate.pkcs12_password}",
             ])
 
+            # Crear sesión TLS
             session = requests.Session()
             session.cert = (cert_path, key_path)
             session.verify = True
@@ -98,18 +99,19 @@ class L10nClRcvSiiService(models.AbstractModel):
 
             if response.status_code != 200:
                 raise UserError(
-                    _("Error HTTP SII: %s") % response.status_code
+                    _("Error HTTP al conectar con el SII: %s")
+                    % response.status_code
                 )
 
             if "SII" not in response.text:
-                raise UserError(_("Respuesta SII inválida."))
+                raise UserError(_("La respuesta del SII no es válida."))
 
             return session
 
         except subprocess.CalledProcessError:
             raise UserError(
                 _("Error al convertir el certificado PFX. "
-                  "La contraseña no pudo ser aplicada.")
+                  "Verifique la contraseña del certificado.")
             )
 
         finally:
