@@ -12,6 +12,7 @@
         "account",
         "l10n_cl",
         "l10n_cl_edi",
+        "certificate",  # ⬅️ CLAVE: modelo certificate.certificate
     ],
 
     # Datos cargados por el módulo
