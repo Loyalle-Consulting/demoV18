@@ -27,7 +27,6 @@ class L10nClRcvImport(models.Model):
         [
             ("draft", "Borrador"),
             ("imported", "Importado"),
-            ("error", "Error"),
         ],
         string="Estado",
         default="draft",
@@ -38,3 +37,37 @@ class L10nClRcvImport(models.Model):
         "import_id",
         string="Líneas RCV",
     )
+
+    def action_reconcile_rcv(self):
+        """Conciliar líneas RCV con facturas Odoo"""
+
+        for rec in self:
+            for line in rec.line_ids:
+
+                move_type = (
+                    "in_invoice"
+                    if line.rcv_type == "purchase"
+                    else "out_invoice"
+                )
+
+                domain = [
+                    ("company_id", "=", rec.company_id.id),
+                    ("move_type", "=", move_type),
+                    ("state", "=", "posted"),
+                    ("l10n_cl_dte_type", "=", int(line.document_type)),
+                    ("l10n_cl_dte_number", "=", int(line.folio)),
+                    ("partner_id.vat", "=", line.partner_vat),
+                ]
+
+                move = self.env["account.move"].search(domain, limit=1)
+
+                if not move:
+                    line.match_state = "not_found"
+                    continue
+
+                line.account_move_id = move.id
+
+                if abs(move.amount_total - line.total_amount) < 1:
+                    line.match_state = "matched"
+                else:
+                    line.match_state = "amount_diff"
