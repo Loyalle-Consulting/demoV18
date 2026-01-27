@@ -36,7 +36,20 @@ class L10nClRcvLine(models.Model):
 
     sii_status = fields.Char(string="Estado SII")
 
+    # 🔗 Factura Odoo
     account_move_id = fields.Many2one(
         "account.move",
         string="Factura Odoo",
+        readonly=True,
+    )
+
+    # 📊 Estado conciliación
+    match_state = fields.Selection(
+        [
+            ("matched", "Conciliado"),
+            ("not_found", "No encontrado"),
+            ("amount_diff", "Diferencia de monto"),
+        ],
+        string="Estado Conciliación",
+        readonly=True,
     )
