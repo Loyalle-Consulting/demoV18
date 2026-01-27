@@ -1,6 +1,7 @@
 import base64
 import tempfile
 import os
+import subprocess
 import requests
 
 from odoo import models, fields, _
@@ -11,29 +12,22 @@ class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
     _description = "Servicio SII RCV Chile – Login real"
 
-    # Entry point desde el wizard
     def fetch_rcv(self, company, year, month, import_type):
         session = self._login_sii(company)
 
-        # En este paso solo validamos login real
         raise UserError(
             _(
                 "Login exitoso en el SII.\n\n"
-                "Sesión autenticada correctamente.\n"
+                "Autenticación TLS correcta.\n"
                 "Siguiente paso: descarga real del RCV (PASO 3B.4)."
             )
         )
 
     # ---------------------------------------------------------
-    # LOGIN REAL AL SII
+    # LOGIN REAL SII CON CONVERSIÓN PFX → PEM
     # ---------------------------------------------------------
     def _login_sii(self, company):
-        """
-        Login real al SII usando certificado productivo cargado en Odoo.
-        Retorna una requests.Session autenticada.
-        """
 
-        # 1) Obtener certificado vigente de la empresa
         certificate = self.env["certificate.certificate"].search(
             [
                 ("company_id", "=", company.id),
@@ -44,61 +38,64 @@ class L10nClRcvSiiService(models.AbstractModel):
         )
 
         if not certificate:
-            raise UserError(
-                _(
-                    "No se encontró un certificado SII vigente "
-                    "para la empresa %s."
-                )
-                % company.name
-            )
+            raise UserError(_("No existe certificado SII vigente."))
 
         if not certificate.content or not certificate.pkcs12_password:
-            raise UserError(
-                _("El certificado SII no tiene contenido o contraseña válida.")
-            )
+            raise UserError(_("Certificado sin contenido o contraseña."))
 
-        # 2) Crear archivo temporal .pfx
-        pfx_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pfx")
+        # Archivos temporales
+        pfx_path = tempfile.mktemp(suffix=".pfx")
+        cert_path = tempfile.mktemp(suffix=".pem")
+        key_path = tempfile.mktemp(suffix=".key")
+
         try:
-            pfx_file.write(base64.b64decode(certificate.content))
-            pfx_file.close()
+            # Guardar PFX
+            with open(pfx_path, "wb") as f:
+                f.write(base64.b64decode(certificate.content))
 
-            # 3) Crear sesión HTTPS con Mutual TLS
+            # Convertir certificado
+            subprocess.check_call([
+                "openssl", "pkcs12",
+                "-in", pfx_path,
+                "-clcerts", "-nokeys",
+                "-out", cert_path,
+                "-passin", f"pass:{certificate.pkcs12_password}",
+            ])
+
+            # Convertir clave privada
+            subprocess.check_call([
+                "openssl", "pkcs12",
+                "-in", pfx_path,
+                "-nocerts", "-nodes",
+                "-out", key_path,
+                "-passin", f"pass:{certificate.pkcs12_password}",
+            ])
+
+            # Crear sesión TLS válida
             session = requests.Session()
-            session.cert = (pfx_file.name, certificate.pkcs12_password)
+            session.cert = (cert_path, key_path)
             session.verify = True
-            session.headers.update(
-                {
-                    "User-Agent": "Odoo-18-RCV-SII",
-                }
-            )
+            session.headers.update({"User-Agent": "Odoo-18-RCV-SII"})
 
-            # 4) Endpoint real de autenticación SII
             login_url = "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi"
-
             response = session.get(login_url, timeout=30)
 
             if response.status_code != 200:
                 raise UserError(
-                    _(
-                        "Error al conectar con el SII.\n"
-                        "Código HTTP: %s"
-                    )
-                    % response.status_code
+                    _("Error HTTP SII: %s") % response.status_code
                 )
 
-            # 5) Validación básica de sesión
             if "SII" not in response.text:
-                raise UserError(
-                    _(
-                        "No fue posible validar la sesión SII.\n"
-                        "Respuesta inesperada del servidor."
-                    )
-                )
+                raise UserError(_("Respuesta SII inválida."))
 
             return session
 
+        except subprocess.CalledProcessError:
+            raise UserError(
+                _("Error al convertir certificado PFX. Verifique contraseña.")
+            )
+
         finally:
-            # 6) Limpieza estricta del archivo temporal
-            if os.path.exists(pfx_file.name):
-                os.unlink(pfx_file.name)
+            for path in (pfx_path, cert_path, key_path):
+                if os.path.exists(path):
+                    os.unlink(path)
