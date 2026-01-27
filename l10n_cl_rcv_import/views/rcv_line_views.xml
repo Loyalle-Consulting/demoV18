@@ -12,6 +12,8 @@
                 <field name="tax_amount"/>
                 <field name="total_amount"/>
                 <field name="sii_status"/>
+                <field name="match_state"/>
+                <field name="account_move_id"/>
             </list>
         </field>
     </record>
