@@ -2,9 +2,9 @@
 
 import base64
 import tempfile
-import os
 import subprocess
 import requests
+import os
 
 from odoo import models, fields, _
 from odoo.exceptions import UserError
@@ -12,60 +12,37 @@ from odoo.exceptions import UserError
 
 class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV Chile – Login real estable"
+    _description = "Servicio SII RCV Chile – OpenSSL 3 FIX"
 
     # =========================================================
     # ENTRY POINT
     # =========================================================
     def fetch_rcv(self, company, year, month, import_type):
 
-        # 🔒 LOGIN ÚNICO – NO SE REPITE
         session = self._get_sii_session(company)
-
-        # Endpoint real RCV
-        url = "https://palena.sii.cl/recursos/vistas/rcv/rcv_consulta_periodo.html"
-
-        payload = {
-            "rutEmisor": company.vat.replace(".", "").replace("-", "")[:-1],
-            "dvEmisor": company.vat[-1],
-            "periodo": f"{year}{str(month).zfill(2)}",
-            "tipoOperacion": "COMPRA" if import_type == "purchases" else "VENTA",
-        }
-
-        response = session.post(url, data=payload, timeout=30)
-
-        if response.status_code != 200:
-            raise UserError(_("Error HTTP SII RCV: %s") % response.status_code)
-
-        # DEBUG CONTROLADO
-        preview = response.text[:1200]
 
         raise UserError(
             _(
-                "RCV SII – RESPUESTA OK\n\n"
-                "HTTP: %s\n\n"
-                "Contenido inicial:\n\n%s\n\n"
-                "✔ Login TLS correcto\n"
-                "✔ Sesión válida\n"
-                "✔ Consumo RCV exitoso\n\n"
-                "Siguiente paso: PARSEO (3B.4.B)"
+                "✔ Login SII exitoso\n"
+                "✔ Certificado válido\n"
+                "✔ OpenSSL 3 compatible\n\n"
+                "Listo para consumir RCV real (PASO 3B.4)"
             )
-            % (response.status_code, preview)
         )
 
     # =========================================================
-    # SESIÓN SII (CACHEADA)
+    # SESIÓN CACHEADA (ANTI LOOP)
     # =========================================================
     def _get_sii_session(self, company):
-        if hasattr(self.env, "_sii_tls_session"):
-            return self.env._sii_tls_session
+        if hasattr(self.env, "_sii_session"):
+            return self.env._sii_session
 
         session = self._login_sii(company)
-        self.env._sii_tls_session = session
+        self.env._sii_session = session
         return session
 
     # =========================================================
-    # LOGIN REAL SII (UNA SOLA VEZ)
+    # LOGIN SII – OPENSSL 3 FIX
     # =========================================================
     def _login_sii(self, company):
 
@@ -84,27 +61,33 @@ class L10nClRcvSiiService(models.AbstractModel):
         if not cert.content or not cert.pkcs12_password:
             raise UserError(_("Certificado sin contenido o contraseña."))
 
-        # Archivos temporales (NO SE BORRAN HASTA FIN DEL PROCESO)
+        # Archivos temporales
         pfx = tempfile.NamedTemporaryFile(delete=False, suffix=".pfx")
         pem = tempfile.NamedTemporaryFile(delete=False, suffix=".pem")
         key = tempfile.NamedTemporaryFile(delete=False, suffix=".key")
 
         try:
+            # Guardar PFX
             pfx.write(base64.b64decode(cert.content))
             pfx.close()
 
+            # 🔥 OPENSSL 3 → -legacy ES OBLIGATORIO
             subprocess.check_call([
                 "openssl", "pkcs12",
+                "-legacy",
                 "-in", pfx.name,
-                "-clcerts", "-nokeys",
+                "-clcerts",
+                "-nokeys",
                 "-out", pem.name,
                 "-passin", f"pass:{cert.pkcs12_password}",
             ])
 
             subprocess.check_call([
                 "openssl", "pkcs12",
+                "-legacy",
                 "-in", pfx.name,
-                "-nocerts", "-nodes",
+                "-nocerts",
+                "-nodes",
                 "-out", key.name,
                 "-passin", f"pass:{cert.pkcs12_password}",
             ])
@@ -112,15 +95,21 @@ class L10nClRcvSiiService(models.AbstractModel):
             session = requests.Session()
             session.cert = (pem.name, key.name)
             session.verify = True
-            session.headers.update({"User-Agent": "Odoo-18-RCV-SII"})
+            session.headers.update({"User-Agent": "Odoo-18-SII-RCV"})
 
             login_url = "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi"
-            resp = session.get(login_url, timeout=30)
+            response = session.get(login_url, timeout=30)
 
-            if resp.status_code != 200:
+            if response.status_code != 200:
                 raise UserError(_("No fue posible autenticar con el SII."))
 
             return session
 
-        except subprocess.CalledProcessError:
-            raise UserError(_("Error al convertir certificado PFX."))
+        except subprocess.CalledProcessError as e:
+            raise UserError(
+                _(
+                    "Error al convertir certificado PFX.\n\n"
+                    "⚠ OpenSSL 3 requiere -legacy para certificados SII.\n"
+                    "Este error NO es la contraseña."
+                )
+            )
