@@ -13,19 +13,16 @@ from odoo.exceptions import UserError
 
 class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV Chile (PFX automático OpenSSL 3 LEGACY)"
+    _description = "Servicio SII RCV Chile (flujo real Angular + PFX)"
 
 
-    # =========================================================
-    # PASO 3B.4 + 3B.5
-    # =========================================================
     def fetch_rcv(self, company, year, month, import_type):
 
         session, cert_files = self._login_sii(company)
 
         try:
-            # 🔥 PASO CLAVE QUE FALTABA
-            self._init_rcv_session(session)
+            # 🔥 PASO REAL OBLIGATORIO
+            self._bootstrap_rcv_angular(session)
 
             html = self._fetch_rcv_html(session, company, year, month, import_type)
             documents = self._parse_rcv_html(html)
@@ -33,8 +30,7 @@ class L10nClRcvSiiService(models.AbstractModel):
             raise UserError(_(
                 "RCV REAL consultado correctamente desde el SII.\n\n"
                 "Documentos detectados: %s\n\n"
-                "TLS + sesión RCV OK.\n"
-                "OPENSSL 3 LEGACY OK.\n\n"
+                "TLS + Angular Session + XSRF OK.\n\n"
                 "Siguiente paso: persistencia (3B.6)."
             ) % len(documents))
 
@@ -45,7 +41,7 @@ class L10nClRcvSiiService(models.AbstractModel):
 
 
     # =========================================================
-    # LOGIN TLS SII
+    # LOGIN TLS
     # =========================================================
     def _login_sii(self, company):
 
@@ -65,63 +61,72 @@ class L10nClRcvSiiService(models.AbstractModel):
         pem_path = tempfile.mktemp(".pem")
         key_path = tempfile.mktemp(".key")
 
-        try:
-            with open(pfx_path, "wb") as f:
-                f.write(base64.b64decode(cert.content))
+        with open(pfx_path, "wb") as f:
+            f.write(base64.b64decode(cert.content))
 
-            subprocess.check_call([
-                "openssl", "pkcs12",
-                "-legacy",
-                "-in", pfx_path,
-                "-clcerts", "-nokeys",
-                "-out", pem_path,
-                "-passin", f"pass:{cert.pkcs12_password}",
-            ])
+        subprocess.check_call([
+            "openssl", "pkcs12", "-legacy",
+            "-in", pfx_path,
+            "-clcerts", "-nokeys",
+            "-out", pem_path,
+            "-passin", f"pass:{cert.pkcs12_password}",
+        ])
 
-            subprocess.check_call([
-                "openssl", "pkcs12",
-                "-legacy",
-                "-in", pfx_path,
-                "-nocerts", "-nodes",
-                "-out", key_path,
-                "-passin", f"pass:{cert.pkcs12_password}",
-            ])
+        subprocess.check_call([
+            "openssl", "pkcs12", "-legacy",
+            "-in", pfx_path,
+            "-nocerts", "-nodes",
+            "-out", key_path,
+            "-passin", f"pass:{cert.pkcs12_password}",
+        ])
 
-            session = requests.Session()
-            session.cert = (pem_path, key_path)
-            session.verify = True
-            session.headers.update({
-                "User-Agent": "Mozilla/5.0",
-            })
+        session = requests.Session()
+        session.cert = (pem_path, key_path)
+        session.verify = True
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0",
+        })
 
-            resp = session.get(
-                "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi",
-                timeout=30
-            )
-
-            if resp.status_code != 200:
-                raise UserError(_("Login SII falló (%s)") % resp.status_code)
-
-            return session, (pfx_path, pem_path, key_path)
-
-        except subprocess.CalledProcessError:
-            raise UserError(_("Error al procesar certificado PFX (OpenSSL LEGACY)."))
-
-
-    # =========================================================
-    # 🔥 INICIALIZAR SESIÓN RCV (OBLIGATORIO)
-    # =========================================================
-    def _init_rcv_session(self, session):
-
-        url = "https://www4.sii.cl/consdcvinternetui/"
-        resp = session.get(url, timeout=30)
+        resp = session.get(
+            "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi",
+            timeout=30
+        )
 
         if resp.status_code != 200:
-            raise UserError(_("No fue posible inicializar sesión RCV (%s)") % resp.status_code)
+            raise UserError(_("Login SII falló (%s)") % resp.status_code)
+
+        return session, (pfx_path, pem_path, key_path)
 
 
     # =========================================================
-    # CONSULTA RCV
+    # 🔥 BOOTSTRAP REAL ANGULAR RCV
+    # =========================================================
+    def _bootstrap_rcv_angular(self, session):
+
+        url = (
+            "https://www4.sii.cl/consdcvinternetui/"
+            "app/rcv/index.html"
+        )
+
+        resp = session.get(url, timeout=30)
+        if resp.status_code != 200:
+            raise UserError(_("No se pudo inicializar RCV Angular (%s)") % resp.status_code)
+
+        # Obtener XSRF desde cookies
+        xsrf = session.cookies.get("XSRF-TOKEN")
+        if not xsrf:
+            raise UserError(_("SII no entregó XSRF-TOKEN (sesión inválida)."))
+
+        # Header obligatorio para el backend
+        session.headers.update({
+            "X-XSRF-TOKEN": xsrf,
+            "Referer": url,
+            "Accept": "application/json",
+        })
+
+
+    # =========================================================
+    # CONSULTA RCV REAL
     # =========================================================
     def _fetch_rcv_html(self, session, company, year, month, import_type):
 
@@ -129,10 +134,10 @@ class L10nClRcvSiiService(models.AbstractModel):
 
         tipo_map = {
             "purchase": "COMPRA",
-            "sale": "VENTA",
-            "both": "AMBOS",
             "compras": "COMPRA",
+            "sale": "VENTA",
             "ventas": "VENTA",
+            "both": "AMBOS",
             "ambos": "AMBOS",
         }
 
@@ -161,7 +166,7 @@ class L10nClRcvSiiService(models.AbstractModel):
 
 
     # =========================================================
-    # PARSEO HTML
+    # PARSEO
     # =========================================================
     def _parse_rcv_html(self, html):
 
