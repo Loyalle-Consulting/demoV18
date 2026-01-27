@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
-
-from odoo import models, _
+from odoo import models, fields, _
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -10,7 +9,7 @@ _logger = logging.getLogger(__name__)
 
 class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV Chile (Odoo 18)"
+    _description = "Servicio SII RCV Chile (Odoo 18 Enterprise)"
 
     # ------------------------------------------------------------------
     # Helpers
@@ -18,23 +17,40 @@ class L10nClRcvSiiService(models.AbstractModel):
 
     def _get_company_certificate(self, company):
         """
-        Obtiene certificado SII válido desde Odoo
+        Obtiene certificado SII vigente según fechas (Odoo 18)
         """
-        certificate = company.l10n_cl_certificate_ids.filtered(
-            lambda c: c.state == "valid"
-        )[:1]
+        today = fields.Date.today()
+
+        certificate = self.env["certificate.certificate"].search(
+            [
+                ("company_id", "=", company.id),
+                ("date_start", "<=", today),
+                ("date_end", ">=", today),
+            ],
+            limit=1,
+        )
 
         if not certificate:
             raise UserError(_(
-                "La empresa no tiene un certificado SII válido.\n"
-                "Configure uno en Ajustes > Certificados."
+                "La empresa no tiene un certificado SII vigente.\n\n"
+                "Revise:\n"
+                "Ajustes > Certificados\n"
+                "- Empresa correcta\n"
+                "- Fecha de validez\n"
+                "- Contraseña correcta"
+            ))
+
+        if not certificate.content or not certificate.pkcs12_password:
+            raise UserError(_(
+                "El certificado SII no tiene contenido o contraseña.\n"
+                "Revise la configuración del certificado."
             ))
 
         return certificate
 
     def _login_sii(self, company):
         """
-        Login REAL al SII usando stack oficial Odoo 18
+        Login REAL SII usando stack oficial Odoo 18
         """
         certificate = self._get_company_certificate(company)
 
@@ -54,14 +70,15 @@ class L10nClRcvSiiService(models.AbstractModel):
 
     def fetch_rcv(self, company, year, month, import_type):
         """
-        PASO 3B.3 – Login REAL confirmado
-        PASO 3B.4 – Parseo se implementa después
+        PASO 3B.3 – Login SII REAL confirmado
         """
         session = self._login_sii(company)
 
-        # Confirmación controlada
+        # Confirmación explícita (controlada)
         raise UserError(_(
             "Login exitoso en el SII.\n\n"
-            "Certificado y sesión TLS válidos.\n"
-            "Siguiente paso: descarga real del RCV (PASO 3B.4)."
+            "✔ Certificado válido\n"
+            "✔ Contraseña correcta\n"
+            "✔ Sesión TLS establecida\n\n"
+            "Siguiente paso: descarga REAL del RCV (PASO 3B.4)."
         ))
