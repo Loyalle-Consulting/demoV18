@@ -39,7 +39,7 @@ class L10nClRcvImport(models.Model):
     )
 
     def action_reconcile_rcv(self):
-        """Conciliar líneas RCV con facturas Odoo"""
+        """Conciliar líneas RCV con facturas Odoo (Odoo 18 compatible)"""
 
         for rec in self:
             for line in rec.line_ids:
@@ -54,8 +54,8 @@ class L10nClRcvImport(models.Model):
                     ("company_id", "=", rec.company_id.id),
                     ("move_type", "=", move_type),
                     ("state", "=", "posted"),
-                    ("l10n_cl_dte_type", "=", int(line.document_type)),
-                    ("l10n_cl_dte_number", "=", int(line.folio)),
+                    ("l10n_latam_document_type_id.code", "=", line.document_type),
+                    ("l10n_latam_document_number", "=", line.folio),
                     ("partner_id.vat", "=", line.partner_vat),
                 ]
 
@@ -63,6 +63,7 @@ class L10nClRcvImport(models.Model):
 
                 if not move:
                     line.match_state = "not_found"
+                    line.account_move_id = False
                     continue
 
                 line.account_move_id = move.id
