@@ -34,5 +34,81 @@ class L10nClRcvImportWizard(models.TransientModel):
     )
 
     def action_import_rcv(self):
-        # Placeholder seguro para Odoo 18
-        return True
+        """Importación MOCK de datos RCV (sin SII real)"""
+
+        self.ensure_one()
+
+        RcvImport = self.env["l10n_cl.rcv.import"]
+        RcvLine = self.env["l10n_cl.rcv.line"]
+
+        # Buscar si ya existe una importación para el período
+        rcv_import = RcvImport.search(
+            [
+                ("company_id", "=", self.company_id.id),
+                ("month", "=", self.month),
+                ("year", "=", self.year),
+            ],
+            limit=1,
+        )
+
+        if not rcv_import:
+            rcv_import = RcvImport.create(
+                {
+                    "company_id": self.company_id.id,
+                    "month": self.month,
+                    "year": self.year,
+                }
+            )
+
+        # Limpiar líneas anteriores (reimportación)
+        rcv_import.line_ids.unlink()
+
+        mock_lines = []
+
+        # Compras simuladas
+        if self.import_type in ("purchase", "both"):
+            mock_lines.append(
+                {
+                    "import_id": rcv_import.id,
+                    "rcv_type": "purchase",
+                    "document_type": "33",
+                    "folio": "1234",
+                    "partner_vat": "76.123.456-7",
+                    "net_amount": 100000,
+                    "tax_amount": 19000,
+                    "total_amount": 119000,
+                    "sii_status": "Aceptado",
+                }
+            )
+
+        # Ventas simuladas
+        if self.import_type in ("sale", "both"):
+            mock_lines.append(
+                {
+                    "import_id": rcv_import.id,
+                    "rcv_type": "sale",
+                    "document_type": "33",
+                    "folio": "5678",
+                    "partner_vat": "96.654.321-0",
+                    "net_amount": 200000,
+                    "tax_amount": 38000,
+                    "total_amount": 238000,
+                    "sii_status": "Aceptado",
+                }
+            )
+
+        # Crear líneas
+        for line_vals in mock_lines:
+            RcvLine.create(line_vals)
+
+        # Marcar como importado
+        rcv_import.state = "imported"
+
+        # Cerrar wizard y volver al registro
+        return {
+            "type": "ir.actions.act_window",
+            "res_model": "l10n_cl.rcv.import",
+            "res_id": rcv_import.id,
+            "view_mode": "form",
+            "target": "current",
+        }
