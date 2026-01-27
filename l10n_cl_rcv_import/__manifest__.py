@@ -15,6 +15,7 @@
         "views/rcv_import_views.xml",
         "views/rcv_line_views.xml",
         "views/rcv_wizard_views.xml",
+        "views/rcv_menu_views.xml",
     ],
     "installable": True,
     "application": False,
