@@ -10,15 +10,11 @@ from odoo.exceptions import UserError
 
 class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV Chile – Flujo REAL"
+    _description = "Servicio SII RCV Chile – Flujo REAL definitivo"
 
 
-    # =========================================================
-    # ENTRY POINT
-    # =========================================================
     def fetch_rcv(self, company, year, month, import_type):
-
-        session = self._login_and_init_rcv_session(company)
+        session = self._login_and_prepare_session(company)
 
         if import_type in ("compras", "ambos"):
             self._fetch_rcv_compras(session, company, year, month)
@@ -26,44 +22,37 @@ class L10nClRcvSiiService(models.AbstractModel):
         if import_type in ("ventas", "ambos"):
             self._fetch_rcv_ventas(session, company, year, month)
 
-        raise UserError(
-            _("RCV consultado correctamente desde el SII.\n"
-              "Sesión válida.\n"
-              "Listo para parseo.")
-        )
+        raise UserError(_("RCV REAL consultado correctamente desde el SII."))
 
 
     # =========================================================
-    # LOGIN + INICIALIZACIÓN RCV (PASO CLAVE)
+    # LOGIN + SESIÓN + SELECCIÓN EMPRESA (CRÍTICO)
     # =========================================================
-    def _login_and_init_rcv_session(self, company):
+    def _login_and_prepare_session(self, company):
 
-        certificate = self.env["certificate.certificate"].search(
-            [
-                ("company_id", "=", company.id),
-                ("date_start", "<=", fields.Date.today()),
-                ("date_end", ">=", fields.Date.today()),
-            ],
-            limit=1,
-        )
+        cert = self.env["certificate.certificate"].search([
+            ("company_id", "=", company.id),
+            ("date_start", "<=", fields.Date.today()),
+            ("date_end", ">=", fields.Date.today()),
+        ], limit=1)
 
-        if not certificate or not certificate.content or not certificate.pkcs12_password:
-            raise UserError(_("Certificado SII no válido o incompleto."))
+        if not cert or not cert.content or not cert.pkcs12_password:
+            raise UserError(_("Certificado SII inválido o incompleto."))
 
         pfx = tempfile.mktemp(".pfx")
-        cert = tempfile.mktemp(".pem")
+        pem = tempfile.mktemp(".pem")
         key = tempfile.mktemp(".key")
 
         try:
             with open(pfx, "wb") as f:
-                f.write(base64.b64decode(certificate.content))
+                f.write(base64.b64decode(cert.content))
 
             subprocess.check_call([
                 "openssl", "pkcs12",
                 "-in", pfx,
                 "-clcerts", "-nokeys",
-                "-out", cert,
-                "-passin", f"pass:{certificate.pkcs12_password}",
+                "-out", pem,
+                "-passin", f"pass:{cert.pkcs12_password}",
                 "-legacy",
             ])
 
@@ -72,33 +61,49 @@ class L10nClRcvSiiService(models.AbstractModel):
                 "-in", pfx,
                 "-nocerts", "-nodes",
                 "-out", key,
-                "-passin", f"pass:{certificate.pkcs12_password}",
+                "-passin", f"pass:{cert.pkcs12_password}",
                 "-legacy",
             ])
 
             session = requests.Session()
-            session.cert = (cert, key)
+            session.cert = (pem, key)
             session.verify = True
-            session.headers.update({"User-Agent": "Odoo-RCV-18"})
 
-            # 1️⃣ LOGIN TLS
-            login_url = "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi"
-            r1 = session.get(login_url, timeout=30)
+            # HEADERS OBLIGATORIOS PARA SII
+            session.headers.update({
+                "User-Agent": "Mozilla/5.0",
+                "Host": "palena.sii.cl",
+                "Origin": "https://palena.sii.cl",
+                "Referer": "https://palena.sii.cl/",
+            })
 
-            if r1.status_code != 200 or "SII" not in r1.text:
-                raise UserError(_("Login SII inválido."))
+            # 1️⃣ LOGIN
+            session.get(
+                "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi",
+                timeout=30
+            )
 
-            # 2️⃣ INICIALIZAR SESIÓN RCV (ESTE ERA EL PASO FALTANTE)
-            init_url = "https://palena.sii.cl/cgi_AUT2000/CAutIniSesion.cgi"
-            r2 = session.get(init_url, timeout=30)
+            # 2️⃣ INICIAR SESIÓN
+            session.get(
+                "https://palena.sii.cl/cgi_AUT2000/CAutIniSesion.cgi",
+                timeout=30
+            )
 
-            if r2.status_code != 200:
-                raise UserError(_("No se pudo inicializar sesión RCV."))
+            # 3️⃣ SELECCIONAR EMPRESA (ESTE ERA EL PASO FALTANTE)
+            rut = company.vat.replace(".", "").replace("-", "")
+            session.post(
+                "https://palena.sii.cl/rcv/rcvSelEmpresa.cgi",
+                data={
+                    "rutEmisor": rut[:-1],
+                    "dvEmisor": rut[-1],
+                },
+                timeout=30
+            )
 
             return session
 
         finally:
-            for f in (pfx, cert, key):
+            for f in (pfx, pem, key):
                 if os.path.exists(f):
                     os.unlink(f)
 
@@ -107,15 +112,10 @@ class L10nClRcvSiiService(models.AbstractModel):
     # RCV COMPRAS
     # =========================================================
     def _fetch_rcv_compras(self, session, company, year, month):
-
         url = "https://palena.sii.cl/rcv/rcvConsultaCompraInternet.do"
-        data = {
-            "rutEmisor": company.vat[:-2],
-            "dvEmisor": company.vat[-1],
-            "periodo": f"{year}{str(month).zfill(2)}",
-        }
+        periodo = f"{year}{str(month).zfill(2)}"
 
-        r = session.post(url, data=data, timeout=60)
+        r = session.post(url, data={"periodo": periodo}, timeout=60)
 
         if r.status_code != 200 or "RCV" not in r.text:
             raise UserError(_("RCV Compras: respuesta inválida del SII."))
@@ -127,15 +127,10 @@ class L10nClRcvSiiService(models.AbstractModel):
     # RCV VENTAS
     # =========================================================
     def _fetch_rcv_ventas(self, session, company, year, month):
-
         url = "https://palena.sii.cl/rcv/rcvConsultaVentaInternet.do"
-        data = {
-            "rutEmisor": company.vat[:-2],
-            "dvEmisor": company.vat[-1],
-            "periodo": f"{year}{str(month).zfill(2)}",
-        }
+        periodo = f"{year}{str(month).zfill(2)}"
 
-        r = session.post(url, data=data, timeout=60)
+        r = session.post(url, data={"periodo": periodo}, timeout=60)
 
         if r.status_code != 200 or "RCV" not in r.text:
             raise UserError(_("RCV Ventas: respuesta inválida del SII."))
