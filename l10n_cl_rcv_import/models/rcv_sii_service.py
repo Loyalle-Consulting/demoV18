@@ -24,27 +24,28 @@ class L10nClRcvSiiService(models.AbstractModel):
         session, cert_files = self._login_sii(company)
 
         try:
+            # 🔥 PASO CLAVE QUE FALTABA
+            self._init_rcv_session(session)
+
             html = self._fetch_rcv_html(session, company, year, month, import_type)
             documents = self._parse_rcv_html(html)
 
-            # CHECKPOINT CONTROLADO
             raise UserError(_(
                 "RCV REAL consultado correctamente desde el SII.\n\n"
                 "Documentos detectados: %s\n\n"
-                "PFX → PEM/KEY automático OK.\n"
+                "TLS + sesión RCV OK.\n"
                 "OPENSSL 3 LEGACY OK.\n\n"
                 "Siguiente paso: persistencia (3B.6)."
             ) % len(documents))
 
         finally:
-            # 🔥 Borrado seguro SOLO al final
             for f in cert_files:
                 if f and os.path.exists(f):
                     os.unlink(f)
 
 
     # =========================================================
-    # LOGIN SII REAL (OPENSSL 3 + PFX LEGACY)
+    # LOGIN TLS SII
     # =========================================================
     def _login_sii(self, company):
 
@@ -57,39 +58,31 @@ class L10nClRcvSiiService(models.AbstractModel):
             limit=1,
         )
 
-        if not cert:
-            raise UserError(_("No existe certificado SII vigente."))
+        if not cert or not cert.content or not cert.pkcs12_password:
+            raise UserError(_("Certificado SII inválido o incompleto."))
 
-        if not cert.content or not cert.pkcs12_password:
-            raise UserError(_("Certificado sin archivo o contraseña."))
-
-        pfx_path = tempfile.mktemp(suffix=".pfx")
-        pem_path = tempfile.mktemp(suffix=".pem")
-        key_path = tempfile.mktemp(suffix=".key")
+        pfx_path = tempfile.mktemp(".pfx")
+        pem_path = tempfile.mktemp(".pem")
+        key_path = tempfile.mktemp(".key")
 
         try:
-            # Guardar PFX
             with open(pfx_path, "wb") as f:
                 f.write(base64.b64decode(cert.content))
 
-            # Certificado público
             subprocess.check_call([
                 "openssl", "pkcs12",
                 "-legacy",
                 "-in", pfx_path,
-                "-clcerts",
-                "-nokeys",
+                "-clcerts", "-nokeys",
                 "-out", pem_path,
                 "-passin", f"pass:{cert.pkcs12_password}",
             ])
 
-            # Llave privada
             subprocess.check_call([
                 "openssl", "pkcs12",
                 "-legacy",
                 "-in", pfx_path,
-                "-nocerts",
-                "-nodes",
+                "-nocerts", "-nodes",
                 "-out", key_path,
                 "-passin", f"pass:{cert.pkcs12_password}",
             ])
@@ -98,34 +91,39 @@ class L10nClRcvSiiService(models.AbstractModel):
             session.cert = (pem_path, key_path)
             session.verify = True
             session.headers.update({
-                "User-Agent": "Odoo-18-SII-RCV"
+                "User-Agent": "Mozilla/5.0",
             })
 
-            login_url = "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi"
-            resp = session.get(login_url, timeout=30)
+            resp = session.get(
+                "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi",
+                timeout=30
+            )
 
             if resp.status_code != 200:
-                raise UserError(_("Login SII falló (HTTP %s)") % resp.status_code)
+                raise UserError(_("Login SII falló (%s)") % resp.status_code)
 
-            # ⚠️ IMPORTANTE: NO borrar aquí
             return session, (pfx_path, pem_path, key_path)
 
         except subprocess.CalledProcessError:
-            raise UserError(_(
-                "Error al procesar el certificado PFX.\n\n"
-                "Este certificado utiliza algoritmos legacy.\n"
-                "OpenSSL 3 con -legacy es obligatorio.\n\n"
-                "Verifique la contraseña."
-            ))
+            raise UserError(_("Error al procesar certificado PFX (OpenSSL LEGACY)."))
 
 
     # =========================================================
-    # CONSULTA RCV REAL
+    # 🔥 INICIALIZAR SESIÓN RCV (OBLIGATORIO)
+    # =========================================================
+    def _init_rcv_session(self, session):
+
+        url = "https://www4.sii.cl/consdcvinternetui/"
+        resp = session.get(url, timeout=30)
+
+        if resp.status_code != 200:
+            raise UserError(_("No fue posible inicializar sesión RCV (%s)") % resp.status_code)
+
+
+    # =========================================================
+    # CONSULTA RCV
     # =========================================================
     def _fetch_rcv_html(self, session, company, year, month, import_type):
-
-        if not company.vat:
-            raise UserError(_("La empresa no tiene RUT configurado."))
 
         rut = company.vat.replace(".", "").replace("-", "")
 
@@ -163,7 +161,7 @@ class L10nClRcvSiiService(models.AbstractModel):
 
 
     # =========================================================
-    # PARSEO HTML RCV
+    # PARSEO HTML
     # =========================================================
     def _parse_rcv_html(self, html):
 
@@ -171,19 +169,16 @@ class L10nClRcvSiiService(models.AbstractModel):
         documents = []
 
         for table in soup.find_all("table"):
-            rows = table.find_all("tr")
-            for row in rows[1:]:
+            for row in table.find_all("tr")[1:]:
                 cols = [c.get_text(strip=True) for c in row.find_all("td")]
-                if len(cols) < 6:
-                    continue
-
-                documents.append({
-                    "tipo_dte": cols[0],
-                    "folio": cols[1],
-                    "rut": cols[2],
-                    "fecha": cols[3],
-                    "neto": cols[4],
-                    "total": cols[5],
-                })
+                if len(cols) >= 6:
+                    documents.append({
+                        "tipo_dte": cols[0],
+                        "folio": cols[1],
+                        "rut": cols[2],
+                        "fecha": cols[3],
+                        "neto": cols[4],
+                        "total": cols[5],
+                    })
 
         return documents
