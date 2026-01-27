@@ -3,7 +3,7 @@ import tempfile
 import os
 import requests
 
-from odoo import models, _
+from odoo import models, fields, _
 from odoo.exceptions import UserError
 
 
@@ -14,12 +14,13 @@ class L10nClRcvSiiService(models.AbstractModel):
     # Entry point desde el wizard
     def fetch_rcv(self, company, year, month, import_type):
         session = self._login_sii(company)
-        # En 3B.3 solo validamos login
+
+        # En este paso solo validamos login real
         raise UserError(
             _(
                 "Login exitoso en el SII.\n\n"
                 "Sesión autenticada correctamente.\n"
-                "Siguiente paso: descarga real del RCV (3B.4)."
+                "Siguiente paso: descarga real del RCV (PASO 3B.4)."
             )
         )
 
