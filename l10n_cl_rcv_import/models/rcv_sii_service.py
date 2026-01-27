@@ -3,7 +3,6 @@
 import base64
 import tempfile
 import os
-import subprocess
 import requests
 from bs4 import BeautifulSoup
 
@@ -13,15 +12,16 @@ from odoo.exceptions import UserError
 
 class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV Chile – REAL"
+    _description = "Servicio SII RCV Chile – REAL (PEM)"
+
 
     # =========================================================
     # PUBLIC
     # =========================================================
     def fetch_rcv(self, company, year, month, import_type):
         """
-        PASO 3B.4 + 3B.5
-        - Login real SII
+        PASO 3B FINAL
+        - Login real SII (PEM)
         - Consulta RCV
         - Parseo HTML
         """
@@ -32,16 +32,17 @@ class L10nClRcvSiiService(models.AbstractModel):
 
         documents = self._parse_rcv_html(html)
 
-        # CHECKPOINT VISUAL (temporal)
+        # CHECKPOINT VISUAL CONTROLADO
         raise UserError(_(
             "RCV REAL consultado correctamente desde el SII.\n\n"
             "Documentos detectados: %s\n\n"
-            "PASO 3B.5 OK\n"
-            "Siguiente: persistir en Odoo (3B.6)."
+            "Conexión y consumo OK.\n"
+            "Siguiente paso: persistencia en Odoo (3B.6)."
         ) % len(documents))
 
+
     # =========================================================
-    # LOGIN REAL SII (ESTABLE – ODOO.SH SAFE)
+    # LOGIN REAL SII (PEM / KEY)
     # =========================================================
     def _login_sii(self, company):
 
@@ -57,71 +58,47 @@ class L10nClRcvSiiService(models.AbstractModel):
         if not certificate:
             raise UserError(_("No existe certificado SII vigente."))
 
-        if not certificate.content or not certificate.pkcs12_password:
-            raise UserError(_("Certificado sin contenido o contraseña."))
+        if not certificate.sii_cert_pem or not certificate.sii_key_pem:
+            raise UserError(_(
+                "El certificado SII debe tener:\n"
+                "- Certificado PEM\n"
+                "- Llave privada KEY\n\n"
+                "Extensión segura, sin usar PFX."
+            ))
 
-        pfx_path = tempfile.mktemp(suffix=".pfx")
         cert_path = tempfile.mktemp(suffix=".pem")
         key_path = tempfile.mktemp(suffix=".key")
-        pass_path = tempfile.mktemp(suffix=".pass")
 
         try:
-            # Guardar PFX
-            with open(pfx_path, "wb") as f:
-                f.write(base64.b64decode(certificate.content))
+            with open(cert_path, "wb") as f:
+                f.write(base64.b64decode(certificate.sii_cert_pem))
 
-            # Guardar contraseña en archivo (CRÍTICO para Odoo.sh)
-            with open(pass_path, "w") as f:
-                f.write(certificate.pkcs12_password)
+            with open(key_path, "wb") as f:
+                f.write(base64.b64decode(certificate.sii_key_pem))
 
-            # Extraer certificado
-            subprocess.check_call([
-                "openssl", "pkcs12",
-                "-in", pfx_path,
-                "-clcerts", "-nokeys",
-                "-out", cert_path,
-                "-passin", f"file:{pass_path}",
-            ])
-
-            # Extraer clave privada
-            subprocess.check_call([
-                "openssl", "pkcs12",
-                "-in", pfx_path,
-                "-nocerts", "-nodes",
-                "-out", key_path,
-                "-passin", f"file:{pass_path}",
-            ])
-
-            # Crear sesión TLS
             session = requests.Session()
             session.cert = (cert_path, key_path)
             session.verify = True
             session.headers.update({
-                "User-Agent": "Odoo-18-RCV-SII"
+                "User-Agent": "Odoo-18-RCV-SII-REAL"
             })
 
             login_url = "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi"
             response = session.get(login_url, timeout=30)
 
             if response.status_code != 200:
-                raise UserError(_("Error HTTP SII: %s") % response.status_code)
+                raise UserError(_("Error HTTP login SII: %s") % response.status_code)
 
             return session
 
-        except subprocess.CalledProcessError as e:
-            raise UserError(_(
-                "Error al convertir certificado PFX.\n"
-                "OpenSSL retornó error.\n"
-                "Verifique contraseña y formato del certificado."
-            ))
-
         finally:
-            for path in (pfx_path, cert_path, key_path, pass_path):
+            for path in (cert_path, key_path):
                 if os.path.exists(path):
                     os.unlink(path)
 
+
     # =========================================================
-    # PASO 3B.4 – CONSULTA RCV REAL
+    # CONSULTA RCV REAL
     # =========================================================
     def _fetch_rcv_html(self, session, company, year, month, import_type):
 
@@ -134,8 +111,8 @@ class L10nClRcvSiiService(models.AbstractModel):
         }.get(import_type.lower(), "COMPRA")
 
         url = (
-            "https://www4.sii.cl/consdcvinternetui/services/data/"
-            "facadeService/getDetalleCompraVenta"
+            "https://www4.sii.cl/consdcvinternetui/services/"
+            "data/facadeService/getDetalleCompraVenta"
         )
 
         payload = {
@@ -152,8 +129,9 @@ class L10nClRcvSiiService(models.AbstractModel):
 
         return response.text
 
+
     # =========================================================
-    # PASO 3B.5 – PARSEO HTML RCV
+    # PARSEO HTML RCV
     # =========================================================
     def _parse_rcv_html(self, html):
 
