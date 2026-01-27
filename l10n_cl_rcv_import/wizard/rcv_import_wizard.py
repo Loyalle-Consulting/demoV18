@@ -1,8 +1,14 @@
-from odoo import models, fields
+from odoo import models, fields, _
+from odoo.exceptions import UserError
+
 
 class L10nClRcvImportWizard(models.TransientModel):
     _name = "l10n_cl.rcv.import.wizard"
     _description = "RCV Import Wizard"
+
+    # =====================
+    # Campos
+    # =====================
 
     company_id = fields.Many2one(
         "res.company",
@@ -33,15 +39,23 @@ class L10nClRcvImportWizard(models.TransientModel):
         required=True,
     )
 
+    # =====================
+    # Acción principal
+    # =====================
+
     def action_import_rcv(self):
-        """Importación MOCK de datos RCV (sin SII real)"""
+        """
+        Importa RCV REAL desde SII (solo lectura)
+        Reemplaza completamente el MOCK
+        """
 
         self.ensure_one()
 
         RcvImport = self.env["l10n_cl.rcv.import"]
         RcvLine = self.env["l10n_cl.rcv.line"]
+        SiiService = self.env["l10n_cl.rcv.sii.service"]
 
-        # Buscar si ya existe una importación para el período
+        # Buscar o crear importación para el período
         rcv_import = RcvImport.search(
             [
                 ("company_id", "=", self.company_id.id),
@@ -63,48 +77,44 @@ class L10nClRcvImportWizard(models.TransientModel):
         # Limpiar líneas anteriores (reimportación)
         rcv_import.line_ids.unlink()
 
-        mock_lines = []
+        # =====================
+        # Llamada REAL al servicio SII
+        # =====================
 
-        # Compras simuladas
-        if self.import_type in ("purchase", "both"):
-            mock_lines.append(
+        try:
+            rcv_data = SiiService.fetch_rcv(
+                company=self.company_id,
+                year=int(self.year),
+                month=int(self.month),
+                import_type=self.import_type,
+            )
+        except Exception as e:
+            raise UserError(
+                _("Error al obtener RCV desde SII:\n%s") % str(e)
+            )
+
+        # =====================
+        # Creación de líneas RCV
+        # =====================
+
+        for line in rcv_data:
+            RcvLine.create(
                 {
                     "import_id": rcv_import.id,
-                    "rcv_type": "purchase",
-                    "document_type": "33",
-                    "folio": "1234",
-                    "partner_vat": "76.123.456-7",
-                    "net_amount": 100000,
-                    "tax_amount": 19000,
-                    "total_amount": 119000,
-                    "sii_status": "Aceptado",
+                    "rcv_type": line.get("rcv_type"),
+                    "document_type": line.get("document_type"),
+                    "folio": line.get("folio"),
+                    "partner_vat": line.get("partner_vat"),
+                    "net_amount": line.get("net"),
+                    "tax_amount": line.get("tax"),
+                    "total_amount": line.get("total"),
+                    "sii_status": line.get("sii_status"),
                 }
             )
 
-        # Ventas simuladas
-        if self.import_type in ("sale", "both"):
-            mock_lines.append(
-                {
-                    "import_id": rcv_import.id,
-                    "rcv_type": "sale",
-                    "document_type": "33",
-                    "folio": "5678",
-                    "partner_vat": "96.654.321-0",
-                    "net_amount": 200000,
-                    "tax_amount": 38000,
-                    "total_amount": 238000,
-                    "sii_status": "Aceptado",
-                }
-            )
-
-        # Crear líneas
-        for line_vals in mock_lines:
-            RcvLine.create(line_vals)
-
-        # Marcar como importado
         rcv_import.state = "imported"
 
-        # Cerrar wizard y volver al registro
+        # Volver al formulario
         return {
             "type": "ir.actions.act_window",
             "res_model": "l10n_cl.rcv.import",
