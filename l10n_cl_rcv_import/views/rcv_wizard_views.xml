@@ -1,4 +1,14 @@
 <odoo>
+
+    <!-- Acción para abrir el Wizard -->
+    <record id="action_rcv_import_wizard" model="ir.actions.act_window">
+        <field name="name">Importar RCV</field>
+        <field name="res_model">l10n_cl.rcv.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Vista del Wizard -->
     <record id="view_rcv_import_wizard_form" model="ir.ui.view">
         <field name="name">l10n_cl.rcv.import.wizard.form</field>
         <field name="model">l10n_cl.rcv.import.wizard</field>
@@ -21,4 +31,5 @@
             </form>
         </field>
     </record>
+
 </odoo>
