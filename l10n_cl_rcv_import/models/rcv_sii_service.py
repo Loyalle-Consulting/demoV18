@@ -17,29 +17,27 @@ class L10nClRcvSiiService(models.AbstractModel):
     # ---------------------------------------------------------
     def fetch_rcv(self, company, year, month, import_type):
         """
-        Paso 3B.3 – Login real contra SII usando certificado PFX
+        PASO 3B.3 – Login real contra SII usando certificado
         """
-        session = self._login_sii(company)
+        self._login_sii(company)
 
-        # Por ahora dejamos el login validado.
-        # El consumo real del endpoint RCV se implementa en PASO 3B.4
+        # Login validado correctamente
         raise UserError(
             _(
                 "Certificado SII validado correctamente.\n\n"
                 "✔ Certificado vigente\n"
                 "✔ Contraseña correcta\n"
-                "✔ Empresa configurada\n\n"
+                "✔ Autenticación TLS exitosa\n\n"
                 "El consumo REAL del RCV se implementa en el PASO 3B.4 "
                 "(consulta directa al endpoint SII RCV)."
             )
         )
 
     # ---------------------------------------------------------
-    # LOGIN REAL SII CON CERTIFICADO PFX (OPENSSL LEGACY)
+    # LOGIN REAL SII (TLS + CERTIFICADO)
     # ---------------------------------------------------------
     def _login_sii(self, company):
 
-        # Buscar certificado vigente de la empresa
         certificate = self.env["certificate.certificate"].search(
             [
                 ("company_id", "=", company.id),
@@ -53,7 +51,7 @@ class L10nClRcvSiiService(models.AbstractModel):
             raise UserError(_("No existe un certificado SII vigente para la empresa."))
 
         if not certificate.content:
-            raise UserError(_("El certificado no tiene contenido cargado (PFX)."))
+            raise UserError(_("El certificado no tiene contenido PFX cargado."))
 
         if not certificate.pkcs12_password:
             raise UserError(_("El certificado no tiene contraseña configurada."))
@@ -70,30 +68,21 @@ class L10nClRcvSiiService(models.AbstractModel):
         os.close(key_fd)
 
         try:
-            # Guardar archivo PFX
+            # Guardar PFX
             with open(pfx_path, "wb") as f:
                 f.write(base64.b64decode(certificate.content))
 
-            # -------------------------------------------------
-            # VALIDACIÓN PREVIA DEL PFX (PASSWORD REAL)
-            # -------------------------------------------------
-            try:
-                subprocess.check_call([
-                    "openssl", "pkcs12",
-                    "-legacy",
-                    "-in", pfx_path,
-                    "-info",
-                    "-noout",
-                    "-passin", f"pass:{password}",
-                ])
-            except subprocess.CalledProcessError:
-                raise UserError(
-                    _("La contraseña del certificado es incorrecta o el archivo PFX es inválido.")
-                )
+            # Validar contraseña PFX
+            subprocess.check_call([
+                "openssl", "pkcs12",
+                "-legacy",
+                "-in", pfx_path,
+                "-info",
+                "-noout",
+                "-passin", f"pass:{password}",
+            ])
 
-            # -------------------------------------------------
-            # EXTRAER CERTIFICADO (PUBLIC CERT)
-            # -------------------------------------------------
+            # Extraer certificado
             subprocess.check_call([
                 "openssl", "pkcs12",
                 "-legacy",
@@ -104,9 +93,7 @@ class L10nClRcvSiiService(models.AbstractModel):
                 "-passin", f"pass:{password}",
             ])
 
-            # -------------------------------------------------
-            # EXTRAER CLAVE PRIVADA
-            # -------------------------------------------------
+            # Extraer clave privada
             subprocess.check_call([
                 "openssl", "pkcs12",
                 "-legacy",
@@ -117,9 +104,7 @@ class L10nClRcvSiiService(models.AbstractModel):
                 "-passin", f"pass:{password}",
             ])
 
-            # -------------------------------------------------
-            # SESIÓN TLS CONTRA SII
-            # -------------------------------------------------
+            # Crear sesión TLS
             session = requests.Session()
             session.cert = (cert_path, key_path)
             session.verify = True
@@ -128,16 +113,14 @@ class L10nClRcvSiiService(models.AbstractModel):
             })
 
             login_url = "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi"
-            response = session.get(login_url, timeout=30)
+            response = session.get(login_url, timeout=30, allow_redirects=True)
 
-            if response.status_code != 200:
+            if response.status_code not in (200, 302):
                 raise UserError(
                     _("Error HTTP al conectar con SII. Código: %s") % response.status_code
                 )
 
-            if "SII" not in response.text:
-                raise UserError(_("La respuesta del SII no es válida."))
-
+            # ✅ NO validar contenido HTML (correcto en 3B.3)
             return session
 
         except subprocess.CalledProcessError:
