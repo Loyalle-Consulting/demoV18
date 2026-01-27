@@ -1,14 +1,14 @@
 <odoo>
-    <record id="view_rcv_import_tree" model="ir.ui.view">
-        <field name="name">l10n_cl.rcv.import.tree</field>
+    <record id="view_rcv_import_list" model="ir.ui.view">
+        <field name="name">l10n_cl.rcv.import.list</field>
         <field name="model">l10n_cl.rcv.import</field>
         <field name="arch" type="xml">
-            <tree>
+            <list>
                 <field name="company_id"/>
                 <field name="month"/>
                 <field name="year"/>
                 <field name="state"/>
-            </tree>
+            </list>
         </field>
     </record>
 
