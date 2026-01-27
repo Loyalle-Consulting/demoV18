@@ -1,105 +1,88 @@
-# -*- coding: utf-8 -*-
-"""
-Servicio SII RCV - Solo lectura
-Compatible con Odoo 18 + l10n_cl
-Reutiliza certificado digital cargado en Odoo
-"""
-
+from odoo import fields
+from odoo.exceptions import UserError
 import logging
-from odoo import models
 
 _logger = logging.getLogger(__name__)
 
 
-class SiiRcvService(models.AbstractModel):
-    _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV (Lectura)"
+class SiiRcvService:
+    """Servicio base para obtención de RCV desde SII (Odoo 18 Enterprise)"""
 
-    # =====================================================
-    # API PUBLICA
-    # =====================================================
+    def __init__(self, env, company):
+        self.env = env
+        self.company = company
+        self.certificate = self._get_valid_certificate()
 
-    def fetch_rcv(self, company, year, month, import_type="both"):
-        """
-        Obtiene RCV real desde SII (Compras / Ventas)
+    # -------------------------------------------------------------------------
+    # CERTIFICADO
+    # -------------------------------------------------------------------------
+    def _get_valid_certificate(self):
+        """Obtiene certificado válido desde modelo estándar de Odoo"""
 
-        :param company: res.company
-        :param year: int (YYYY)
-        :param month: int (1-12)
-        :param import_type: 'purchase', 'sale', 'both'
-        :return: lista de dict normalizados
-        """
+        cert = self.env["certificate.certificate"].search([
+            ("company_id", "=", self.company.id),
+            ("date_start", "<=", fields.Date.today()),
+            ("date_end", ">=", fields.Date.today()),
+        ], limit=1)
+
+        if not cert:
+            raise UserError(
+                "La empresa no tiene un certificado digital SII válido cargado.\n"
+                "Debe cargar un certificado vigente en Ajustes > Certificados."
+            )
 
         _logger.info(
-            "RCV SII | Empresa=%s Año=%s Mes=%s Tipo=%s",
-            company.name,
-            year,
+            "RCV SII: usando certificado %s (vigente hasta %s)",
+            cert.name,
+            cert.date_end,
+        )
+
+        return cert
+
+    # -------------------------------------------------------------------------
+    # LOGIN SII (PLACEHOLDER REAL)
+    # -------------------------------------------------------------------------
+    def login(self):
+        """
+        Login SII usando certificado.
+        (Aquí se integrará requests + mutual TLS)
+        """
+
+        # EJEMPLO DE DATOS DISPONIBLES
+        cert_content = self.certificate.content
+        cert_password = self.certificate.pkcs12_password
+
+        if not cert_content or not cert_password:
+            raise UserError(
+                "El certificado no contiene información completa "
+                "(archivo o contraseña)."
+            )
+
+        _logger.info("RCV SII: login preparado correctamente")
+
+        # Placeholder login real
+        return True
+
+    # -------------------------------------------------------------------------
+    # OBTENER RCV
+    # -------------------------------------------------------------------------
+    def get_rcv(self, year, month):
+        """
+        Obtiene RCV desde SII (REAL en siguientes pasos)
+        """
+
+        self.login()
+
+        _logger.info(
+            "RCV SII: solicitando RCV %s/%s para empresa %s",
             month,
-            import_type,
+            year,
+            self.company.name,
         )
 
-        certificate = self._get_company_certificate(company)
-
-        # 🔐 Aquí más adelante se hará la autenticación real SII
-        # Por ahora dejamos el esqueleto funcional
-
-        rcv_data = []
-
-        if import_type in ("purchase", "both"):
-            rcv_data += self._fetch_purchase_rcv(
-                company, certificate, year, month
-            )
-
-        if import_type in ("sale", "both"):
-            rcv_data += self._fetch_sale_rcv(
-                company, certificate, year, month
-            )
-
-        return rcv_data
-
-    # =====================================================
-    # IMPLEMENTACIONES INTERNAS
-    # =====================================================
-
-    def _get_company_certificate(self, company):
-        """
-        Obtiene el certificado digital activo de la empresa
-        """
-        certificate = self.env["l10n_cl.certificate"].search(
-            [
-                ("company_id", "=", company.id),
-                ("state", "=", "valid"),
-            ],
-            limit=1,
-        )
-
-        if not certificate:
-            raise ValueError(
-                "La empresa no tiene certificado digital válido para SII."
-            )
-
-        return certificate
-
-    def _fetch_purchase_rcv(self, company, certificate, year, month):
-        """
-        Obtiene RCV Compras desde SII
-        (Implementación real en siguiente etapa)
-        """
-        _logger.info("RCV SII | Descargando COMPRAS")
-
-        # ⚠️ Aquí irá:
-        # - Login SII
-        # - POST HTTPS
-        # - Parse XML / HTML
-        # - Normalización
-
-        return []
-
-    def _fetch_sale_rcv(self, company, certificate, year, month):
-        """
-        Obtiene RCV Ventas desde SII
-        (Implementación real en siguiente etapa)
-        """
-        _logger.info("RCV SII | Descargando VENTAS")
-
-        return []
+        # 🔴 AQUÍ VA LA LLAMADA REAL A SII
+        # Por ahora devolvemos estructura simulada
+        return {
+            "purchases": [],
+            "sales": [],
+        }
