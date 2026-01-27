@@ -13,45 +13,49 @@ from odoo.exceptions import UserError
 
 class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV Chile (PFX automático OpenSSL 3)"
+    _description = "Servicio SII RCV Chile (PFX automático OpenSSL 3 LEGACY)"
 
 
     # =========================================================
-    # PUBLIC
+    # PASO 3B.4 + 3B.5
     # =========================================================
     def fetch_rcv(self, company, year, month, import_type):
 
-        session = self._login_sii(company)
+        session, cert_files = self._login_sii(company)
 
-        html = self._fetch_rcv_html(
-            session=session,
-            company=company,
-            year=year,
-            month=month,
-            import_type=import_type,
-        )
+        try:
+            html = self._fetch_rcv_html(session, company, year, month, import_type)
+            documents = self._parse_rcv_html(html)
 
-        documents = self._parse_rcv_html(html)
+            # CHECKPOINT CONTROLADO
+            raise UserError(_(
+                "RCV REAL consultado correctamente desde el SII.\n\n"
+                "Documentos detectados: %s\n\n"
+                "PFX → PEM/KEY automático OK.\n"
+                "OPENSSL 3 LEGACY OK.\n\n"
+                "Siguiente paso: persistencia (3B.6)."
+            ) % len(documents))
 
-        # CHECKPOINT VISUAL CONTROLADO
-        raise UserError(_(
-            "RCV REAL consultado correctamente desde el SII.\n\n"
-            "Documentos detectados: %s\n\n"
-            "PFX + OpenSSL 3 + Sesión RCV OK.\n"
-            "Siguiente paso: persistencia en Odoo (3B.6)."
-        ) % len(documents))
+        finally:
+            # 🔥 Borrado seguro SOLO al final
+            for f in cert_files:
+                if f and os.path.exists(f):
+                    os.unlink(f)
 
 
     # =========================================================
-    # LOGIN SII REAL (PFX + OPENSSL 3 LEGACY)
+    # LOGIN SII REAL (OPENSSL 3 + PFX LEGACY)
     # =========================================================
     def _login_sii(self, company):
 
-        cert = self.env["certificate.certificate"].search([
-            ("company_id", "=", company.id),
-            ("date_start", "<=", fields.Date.today()),
-            ("date_end", ">=", fields.Date.today()),
-        ], limit=1)
+        cert = self.env["certificate.certificate"].search(
+            [
+                ("company_id", "=", company.id),
+                ("date_start", "<=", fields.Date.today()),
+                ("date_end", ">=", fields.Date.today()),
+            ],
+            limit=1,
+        )
 
         if not cert:
             raise UserError(_("No existe certificado SII vigente."))
@@ -68,7 +72,7 @@ class L10nClRcvSiiService(models.AbstractModel):
             with open(pfx_path, "wb") as f:
                 f.write(base64.b64decode(cert.content))
 
-            # Extraer CERT (PEM)
+            # Certificado público
             subprocess.check_call([
                 "openssl", "pkcs12",
                 "-legacy",
@@ -79,7 +83,7 @@ class L10nClRcvSiiService(models.AbstractModel):
                 "-passin", f"pass:{cert.pkcs12_password}",
             ])
 
-            # Extraer KEY
+            # Llave privada
             subprocess.check_call([
                 "openssl", "pkcs12",
                 "-legacy",
@@ -90,62 +94,57 @@ class L10nClRcvSiiService(models.AbstractModel):
                 "-passin", f"pass:{cert.pkcs12_password}",
             ])
 
-            # Crear sesión HTTPS con certificado
             session = requests.Session()
             session.cert = (pem_path, key_path)
             session.verify = True
             session.headers.update({
-                "User-Agent": "Odoo-18-SII-RCV",
+                "User-Agent": "Odoo-18-SII-RCV"
             })
 
-            # LOGIN BASE SII
             login_url = "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi"
             resp = session.get(login_url, timeout=30)
 
             if resp.status_code != 200:
-                raise UserError(_("Login SII falló (%s)") % resp.status_code)
+                raise UserError(_("Login SII falló (HTTP %s)") % resp.status_code)
 
-            return session
+            # ⚠️ IMPORTANTE: NO borrar aquí
+            return session, (pfx_path, pem_path, key_path)
 
         except subprocess.CalledProcessError:
             raise UserError(_(
-                "Error al abrir certificado PFX.\n\n"
-                "Este certificado requiere OpenSSL 3 en modo LEGACY.\n"
-                "Verifique contraseña y validez del archivo."
+                "Error al procesar el certificado PFX.\n\n"
+                "Este certificado utiliza algoritmos legacy.\n"
+                "OpenSSL 3 con -legacy es obligatorio.\n\n"
+                "Verifique la contraseña."
             ))
-
-        finally:
-            # Limpieza segura
-            for f in (pfx_path, pem_path, key_path):
-                if f and os.path.exists(f):
-                    os.unlink(f)
 
 
     # =========================================================
-    # CONSULTA RCV REAL (CON ACTIVACIÓN DE SESIÓN)
+    # CONSULTA RCV REAL
     # =========================================================
     def _fetch_rcv_html(self, session, company, year, month, import_type):
 
+        if not company.vat:
+            raise UserError(_("La empresa no tiene RUT configurado."))
+
         rut = company.vat.replace(".", "").replace("-", "")
 
-        tipo = {
+        tipo_map = {
+            "purchase": "COMPRA",
+            "sale": "VENTA",
+            "both": "AMBOS",
             "compras": "COMPRA",
             "ventas": "VENTA",
             "ambos": "AMBOS",
-        }.get(import_type.lower())
+        }
 
+        tipo = tipo_map.get((import_type or "").lower())
         if not tipo:
             raise UserError(_("Tipo de importación inválido: %s") % import_type)
 
-        # 🔑 PASO CRÍTICO: ACTIVAR SESIÓN RCV (evita 401)
-        session.get(
-            "https://www4.sii.cl/consdcvinternetui/",
-            timeout=30
-        )
-
         url = (
-            "https://www4.sii.cl/consdcvinternetui/"
-            "services/data/facadeService/getDetalleCompraVenta"
+            "https://www4.sii.cl/consdcvinternetui/services/data/"
+            "facadeService/getDetalleCompraVenta"
         )
 
         payload = {
@@ -157,9 +156,6 @@ class L10nClRcvSiiService(models.AbstractModel):
 
         resp = session.post(url, json=payload, timeout=60)
 
-        if resp.status_code == 401:
-            raise UserError(_("RCV rechazado por SII (401). Sesión no válida."))
-
         if resp.status_code != 200:
             raise UserError(_("Error HTTP RCV: %s") % resp.status_code)
 
@@ -167,7 +163,7 @@ class L10nClRcvSiiService(models.AbstractModel):
 
 
     # =========================================================
-    # PARSEO RCV
+    # PARSEO HTML RCV
     # =========================================================
     def _parse_rcv_html(self, html):
 
@@ -178,14 +174,16 @@ class L10nClRcvSiiService(models.AbstractModel):
             rows = table.find_all("tr")
             for row in rows[1:]:
                 cols = [c.get_text(strip=True) for c in row.find_all("td")]
-                if len(cols) >= 6:
-                    documents.append({
-                        "tipo_dte": cols[0],
-                        "folio": cols[1],
-                        "rut": cols[2],
-                        "fecha": cols[3],
-                        "neto": cols[4],
-                        "total": cols[5],
-                    })
+                if len(cols) < 6:
+                    continue
+
+                documents.append({
+                    "tipo_dte": cols[0],
+                    "folio": cols[1],
+                    "rut": cols[2],
+                    "fecha": cols[3],
+                    "neto": cols[4],
+                    "total": cols[5],
+                })
 
         return documents
