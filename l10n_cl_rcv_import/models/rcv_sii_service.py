@@ -1,8 +1,11 @@
+# -*- coding: utf-8 -*-
+
 import base64
 import tempfile
 import os
 import subprocess
 import requests
+from bs4 import BeautifulSoup
 
 from odoo import models, fields, _
 from odoo.exceptions import UserError
@@ -10,128 +13,155 @@ from odoo.exceptions import UserError
 
 class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV Chile – Flujo REAL definitivo"
+    _description = "Servicio SII RCV Chile – REAL"
+
 
     # =========================================================
-    # ENTRY POINT
+    # PUBLIC
     # =========================================================
     def fetch_rcv(self, company, year, month, import_type):
-        session = self._login_and_prepare_session(company)
+        """
+        PASO 3B.4 + 3B.5
+        - Login real SII
+        - Consulta RCV
+        - Parseo HTML
+        """
 
-        if import_type in ("compras", "ambos"):
-            self._fetch_rcv_compras(session, year, month)
+        session = self._login_sii(company)
 
-        if import_type in ("ventas", "ambos"):
-            self._fetch_rcv_ventas(session, year, month)
+        html = self._fetch_rcv_html(session, company, year, month, import_type)
 
-        raise UserError(_("RCV REAL consultado correctamente desde el SII."))
+        documents = self._parse_rcv_html(html)
+
+        # CHECKPOINT VISUAL (temporal)
+        raise UserError(_(
+            "RCV REAL consultado correctamente desde el SII.\n\n"
+            "Documentos detectados: %s\n\n"
+            "PASO 3B.5 OK\n"
+            "Siguiente: persistir en Odoo (3B.6)."
+        ) % len(documents))
+
 
     # =========================================================
-    # LOGIN + SESIÓN + SELECCIÓN EMPRESA (CRÍTICO)
+    # LOGIN REAL SII (ESTABLE)
     # =========================================================
-    def _login_and_prepare_session(self, company):
+    def _login_sii(self, company):
 
-        cert = self.env["certificate.certificate"].search([
-            ("company_id", "=", company.id),
-            ("date_start", "<=", fields.Date.today()),
-            ("date_end", ">=", fields.Date.today()),
-        ], limit=1)
+        certificate = self.env["certificate.certificate"].search(
+            [
+                ("company_id", "=", company.id),
+                ("date_start", "<=", fields.Date.today()),
+                ("date_end", ">=", fields.Date.today()),
+            ],
+            limit=1,
+        )
 
-        if not cert or not cert.content or not cert.pkcs12_password:
-            raise UserError(_("Certificado SII inválido o incompleto."))
+        if not certificate:
+            raise UserError(_("No existe certificado SII vigente."))
 
-        pfx = tempfile.mktemp(".pfx")
-        pem = tempfile.mktemp(".pem")
-        key = tempfile.mktemp(".key")
+        if not certificate.content or not certificate.pkcs12_password:
+            raise UserError(_("Certificado sin contenido o contraseña."))
+
+        pfx_path = tempfile.mktemp(suffix=".pfx")
+        cert_path = tempfile.mktemp(suffix=".pem")
+        key_path = tempfile.mktemp(suffix=".key")
 
         try:
-            with open(pfx, "wb") as f:
-                f.write(base64.b64decode(cert.content))
+            with open(pfx_path, "wb") as f:
+                f.write(base64.b64decode(certificate.content))
 
             subprocess.check_call([
                 "openssl", "pkcs12",
-                "-in", pfx,
+                "-in", pfx_path,
                 "-clcerts", "-nokeys",
-                "-out", pem,
-                "-passin", f"pass:{cert.pkcs12_password}",
-                "-legacy",
+                "-out", cert_path,
+                "-passin", f"pass:{certificate.pkcs12_password}",
             ])
 
             subprocess.check_call([
                 "openssl", "pkcs12",
-                "-in", pfx,
+                "-in", pfx_path,
                 "-nocerts", "-nodes",
-                "-out", key,
-                "-passin", f"pass:{cert.pkcs12_password}",
-                "-legacy",
+                "-out", key_path,
+                "-passin", f"pass:{certificate.pkcs12_password}",
             ])
 
             session = requests.Session()
-            session.cert = (pem, key)
+            session.cert = (cert_path, key_path)
             session.verify = True
-
-            # HEADERS OBLIGATORIOS PARA SII
             session.headers.update({
-                "User-Agent": "Mozilla/5.0",
-                "Host": "palena.sii.cl",
-                "Origin": "https://palena.sii.cl",
-                "Referer": "https://palena.sii.cl/",
+                "User-Agent": "Odoo-18-RCV-SII"
             })
 
-            # 1️⃣ LOGIN TLS
-            session.get(
-                "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi",
-                timeout=30
-            )
+            login_url = "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi"
+            response = session.get(login_url, timeout=30)
 
-            # 2️⃣ INICIO DE SESIÓN
-            session.get(
-                "https://palena.sii.cl/cgi_AUT2000/CAutIniSesion.cgi",
-                timeout=30
-            )
-
-            # 3️⃣ SELECCIÓN DE EMPRESA (PASO CLAVE)
-            rut = company.vat.replace(".", "").replace("-", "")
-            session.post(
-                "https://palena.sii.cl/rcv/rcvSelEmpresa.cgi",
-                data={
-                    "rutEmisor": rut[:-1],
-                    "dvEmisor": rut[-1],
-                },
-                timeout=30
-            )
+            if response.status_code != 200:
+                raise UserError(_("Error HTTP SII: %s") % response.status_code)
 
             return session
 
         finally:
-            for f in (pfx, pem, key):
-                if os.path.exists(f):
-                    os.unlink(f)
+            for path in (pfx_path, cert_path, key_path):
+                if os.path.exists(path):
+                    os.unlink(path)
+
 
     # =========================================================
-    # RCV COMPRAS
+    # PASO 3B.4 – CONSULTA RCV REAL
     # =========================================================
-    def _fetch_rcv_compras(self, session, year, month):
-        url = "https://palena.sii.cl/rcv/rcvConsultaCompraInternet.do"
-        periodo = f"{year}{str(month).zfill(2)}"
+    def _fetch_rcv_html(self, session, company, year, month, import_type):
 
-        r = session.post(url, data={"periodo": periodo}, timeout=60)
+        rut = company.vat.replace(".", "").replace("-", "")
 
-        if r.status_code != 200 or "RCV" not in r.text:
-            raise UserError(_("RCV Compras: respuesta inválida del SII."))
+        tipo = {
+            "compras": "COMPRA",
+            "ventas": "VENTA",
+            "ambos": "AMBOS",
+        }.get(import_type.lower(), "COMPRA")
 
-        return r.text
+        url = "https://www4.sii.cl/consdcvinternetui/services/data/facadeService/getDetalleCompraVenta"
+
+        payload = {
+            "rutEmisor": rut[:-1],
+            "dvEmisor": rut[-1],
+            "periodo": f"{year}{str(month).zfill(2)}",
+            "tipoOperacion": tipo,
+        }
+
+        response = session.post(url, json=payload, timeout=60)
+
+        if response.status_code != 200:
+            raise UserError(_("Error HTTP RCV: %s") % response.status_code)
+
+        return response.text
+
 
     # =========================================================
-    # RCV VENTAS
+    # PASO 3B.5 – PARSEO HTML RCV
     # =========================================================
-    def _fetch_rcv_ventas(self, session, year, month):
-        url = "https://palena.sii.cl/rcv/rcvConsultaVentaInternet.do"
-        periodo = f"{year}{str(month).zfill(2)}"
+    def _parse_rcv_html(self, html):
 
-        r = session.post(url, data={"periodo": periodo}, timeout=60)
+        soup = BeautifulSoup(html, "lxml")
 
-        if r.status_code != 200 or "RCV" not in r.text:
-            raise UserError(_("RCV Ventas: respuesta inválida del SII."))
+        tables = soup.find_all("table")
 
-        return r.text
+        documents = []
+
+        for table in tables:
+            rows = table.find_all("tr")
+            for row in rows[1:]:
+                cols = [c.get_text(strip=True) for c in row.find_all("td")]
+                if len(cols) < 6:
+                    continue
+
+                documents.append({
+                    "tipo_dte": cols[0],
+                    "folio": cols[1],
+                    "rut": cols[2],
+                    "fecha": cols[3],
+                    "neto": cols[4],
+                    "total": cols[5],
+                })
+
+        return documents
