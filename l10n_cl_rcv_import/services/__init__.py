@@ -1,1 +1,1 @@
-from . import sii_rcv_service
+from .sii_rcv_service import SiiRcvService
