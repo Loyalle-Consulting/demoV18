@@ -10,63 +10,34 @@ from odoo.exceptions import UserError
 
 class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV Chile – Compras (RCV)"
+    _description = "Servicio SII RCV Chile – Login y Base Real"
 
 
     # =========================================================
-    # API PRINCIPAL – RCV COMPRAS
+    # MÉTODO PRINCIPAL (wizard)
     # =========================================================
     def fetch_rcv(self, company, year, month, import_type):
         """
-        Punto de entrada llamado desde el wizard.
-        Implementación REAL para RCV COMPRAS.
+        Punto único de entrada.
+        No vuelve a ramificar flujos → evita loops.
         """
-
-        if import_type != "purchase":
-            raise UserError(_("Este servicio solo maneja RCV COMPRAS."))
 
         session = self._login_sii(company)
 
-        # Endpoint REAL RCV Compras (SII)
-        url = (
-            "https://palena.sii.cl/cgi_dte/UPL/RCV/"
-            "ConsultaRCVCompra.cgi"
-        )
-
-        payload = {
-            "rutEmisor": company.vat.replace(".", "").replace("-", "")[:-1],
-            "dvEmisor": company.vat[-1],
-            "periodo": f"{year}{str(month).zfill(2)}",
-        }
-
-        response = session.post(url, data=payload, timeout=60)
-
-        if response.status_code != 200:
-            raise UserError(
-                _("Error HTTP al consultar RCV Compras: %s")
-                % response.status_code
-            )
-
-        if not response.text or "html" in response.text.lower():
-            raise UserError(
-                _("La respuesta del SII no es válida.")
-            )
-
-        # 🔴 PUNTO CONTROLADO: aquí el SII YA responde datos reales
         raise UserError(
             _(
-                "RCV COMPRAS consultado correctamente.\n\n"
-                "✔ Login SII exitoso\n"
+                "✔ Login SII REAL exitoso\n"
                 "✔ Certificado válido\n"
-                "✔ Respuesta REAL del SII recibida\n\n"
-                "Siguiente paso: PASO 3B.5 – Parseo y creación "
-                "de líneas RCV en Odoo."
+                "✔ Contraseña correcta\n"
+                "✔ Autenticación TLS establecida\n\n"
+                "El consumo REAL del RCV se implementa "
+                "en el PASO 3B.5 (descarga y parseo)."
             )
         )
 
 
     # =========================================================
-    # LOGIN REAL SII (TLS + CERTIFICADO)
+    # LOGIN REAL SII (CORREGIDO ODOO 18)
     # =========================================================
     def _login_sii(self, company):
 
@@ -82,10 +53,12 @@ class L10nClRcvSiiService(models.AbstractModel):
         if not certificate:
             raise UserError(_("No existe certificado SII vigente."))
 
-        if not certificate.content or not certificate.pkcs12_password:
-            raise UserError(_("Certificado sin contenido o contraseña."))
+        # 🔴 CAMPO CORRECTO EN ODOO 18
+        if not certificate.content or not certificate.password:
+            raise UserError(
+                _("El certificado no tiene contenido o contraseña definida.")
+            )
 
-        # Archivos temporales
         pfx_path = tempfile.mktemp(suffix=".pfx")
         cert_path = tempfile.mktemp(suffix=".pem")
         key_path = tempfile.mktemp(suffix=".key")
@@ -101,7 +74,7 @@ class L10nClRcvSiiService(models.AbstractModel):
                 "-in", pfx_path,
                 "-clcerts", "-nokeys",
                 "-out", cert_path,
-                "-passin", f"pass:{certificate.pkcs12_password}",
+                "-passin", f"pass:{certificate.password}",
             ])
 
             # Clave privada
@@ -110,7 +83,7 @@ class L10nClRcvSiiService(models.AbstractModel):
                 "-in", pfx_path,
                 "-nocerts", "-nodes",
                 "-out", key_path,
-                "-passin", f"pass:{certificate.pkcs12_password}",
+                "-passin", f"pass:{certificate.password}",
             ])
 
             session = requests.Session()
@@ -135,7 +108,8 @@ class L10nClRcvSiiService(models.AbstractModel):
 
         except subprocess.CalledProcessError:
             raise UserError(
-                _("Error al convertir certificado PFX. Verifique la contraseña.")
+                _("Error al convertir el certificado PFX. "
+                  "La contraseña no pudo ser aplicada.")
             )
 
         finally:
