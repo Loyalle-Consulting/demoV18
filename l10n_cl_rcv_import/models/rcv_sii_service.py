@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import base64
 import tempfile
 import os
@@ -10,27 +12,55 @@ from odoo.exceptions import UserError
 
 class L10nClRcvSiiService(models.AbstractModel):
     _name = "l10n_cl.rcv.sii.service"
-    _description = "Servicio SII RCV Chile – Login estable Odoo 18 (OpenSSL 3 safe)"
+    _description = "Servicio SII RCV Chile – Login y Consumo REAL"
 
 
     # =========================================================
-    # ENTRY POINT (SIN LOOP)
+    # PASO PRINCIPAL
     # =========================================================
     def fetch_rcv(self, company, year, month, import_type):
+        """
+        PASO 3B.4.A
+        - Login TLS real (ya validado)
+        - Consumo REAL endpoint RCV
+        - Mostrar respuesta cruda del SII
+        """
 
-        self._login_sii(company)
+        session = self._login_sii(company)
 
-        raise UserError(_(
-            "✔ Certificado SII validado correctamente\n"
-            "✔ Contraseña correcta\n"
-            "✔ Autenticación TLS exitosa\n\n"
-            "El consumo REAL del RCV se implementa en el PASO 3B.5\n"
-            "(consulta directa al endpoint oficial del SII)."
-        ))
+        # Endpoint REAL RCV (usado por SII)
+        rcv_url = "https://palena.sii.cl/recursos/vistas/rcv/rcv_consulta_periodo.html"
+
+        payload = {
+            "rutEmisor": company.vat.replace(".", "").replace("-", "")[:-1],
+            "dvEmisor": company.vat[-1],
+            "periodo": f"{year}{str(month).zfill(2)}",
+            "tipoOperacion": "VENTA" if import_type == "sales" else "COMPRA",
+        }
+
+        response = session.post(rcv_url, data=payload, timeout=30)
+
+        if response.status_code != 200:
+            raise UserError(
+                _("Error HTTP al consultar RCV SII: %s") % response.status_code
+            )
+
+        # MOSTRAR RESPUESTA CRUDA (DEBUG CONTROLADO)
+        preview = response.text[:1500]
+
+        raise UserError(
+            _(
+                "RCV SII – RESPUESTA RECIBIDA (DEBUG)\n\n"
+                "Status HTTP: %s\n\n"
+                "Primeros caracteres de la respuesta:\n\n%s\n\n"
+                "El parseo y creación de líneas se implementa en el PASO 3B.4.B."
+            )
+            % (response.status_code, preview)
+        )
 
 
     # =========================================================
-    # LOGIN REAL SII (OPENSSL 3 COMPATIBLE)
+    # LOGIN REAL SII (TLS + CERTIFICADO)
     # =========================================================
     def _login_sii(self, company):
 
@@ -46,11 +76,8 @@ class L10nClRcvSiiService(models.AbstractModel):
         if not certificate:
             raise UserError(_("No existe certificado SII vigente."))
 
-        if not certificate.content:
-            raise UserError(_("El certificado no contiene archivo PFX."))
-
-        if not certificate.pkcs12_password:
-            raise UserError(_("El certificado no tiene contraseña definida."))
+        if not certificate.content or not certificate.pkcs12_password:
+            raise UserError(_("Certificado sin contenido o contraseña."))
 
         pfx_path = tempfile.mktemp(suffix=".pfx")
         cert_path = tempfile.mktemp(suffix=".pem")
@@ -61,53 +88,63 @@ class L10nClRcvSiiService(models.AbstractModel):
             with open(pfx_path, "wb") as f:
                 f.write(base64.b64decode(certificate.content))
 
-            # ===============================
-            # OPENSSL 3 → USAR -legacy
-            # ===============================
-            subprocess.check_call([
-                "openssl", "pkcs12",
-                "-legacy",
-                "-in", pfx_path,
-                "-clcerts", "-nokeys",
-                "-out", cert_path,
-                "-passin", f"pass:{certificate.pkcs12_password}",
-            ])
+            # Certificado público
+            subprocess.check_call(
+                [
+                    "openssl",
+                    "pkcs12",
+                    "-in",
+                    pfx_path,
+                    "-clcerts",
+                    "-nokeys",
+                    "-out",
+                    cert_path,
+                    "-passin",
+                    f"pass:{certificate.pkcs12_password}",
+                ]
+            )
 
-            subprocess.check_call([
-                "openssl", "pkcs12",
-                "-legacy",
-                "-in", pfx_path,
-                "-nocerts", "-nodes",
-                "-out", key_path,
-                "-passin", f"pass:{certificate.pkcs12_password}",
-            ])
+            # Clave privada
+            subprocess.check_call(
+                [
+                    "openssl",
+                    "pkcs12",
+                    "-in",
+                    pfx_path,
+                    "-nocerts",
+                    "-nodes",
+                    "-out",
+                    key_path,
+                    "-passin",
+                    f"pass:{certificate.pkcs12_password}",
+                ]
+            )
 
-            # Sesión TLS
             session = requests.Session()
             session.cert = (cert_path, key_path)
             session.verify = True
-            session.headers.update({
-                "User-Agent": "Odoo-18-RCV-SII"
-            })
+            session.headers.update(
+                {
+                    "User-Agent": "Odoo-18-RCV-SII",
+                    "Accept": "text/html,application/xhtml+xml",
+                }
+            )
 
+            # Login SII
             login_url = "https://palena.sii.cl/cgi_AUT2000/CAutInicio.cgi"
-            response = session.get(login_url, timeout=30)
+            login_response = session.get(login_url, timeout=30)
 
-            if response.status_code != 200:
-                raise UserError(_("Error HTTP SII: %s") % response.status_code)
-
-            if "SII" not in response.text:
-                raise UserError(_("Respuesta inválida del SII."))
+            if login_response.status_code != 200:
+                raise UserError(_("Error de autenticación SII."))
 
             return session
 
         except subprocess.CalledProcessError:
-            raise UserError(_(
-                "Error al convertir certificado PFX.\n"
-                "La contraseña es correcta, pero OpenSSL requiere modo legacy."
-            ))
+            raise UserError(
+                _("Error al convertir certificado PFX. Verifique contraseña.")
+            )
 
         finally:
             for path in (pfx_path, cert_path, key_path):
-                if os.path.exists(path):
+                if path and os.path.exists(path):
                     os.unlink(path)
