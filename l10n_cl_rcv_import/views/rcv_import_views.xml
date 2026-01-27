@@ -1,6 +1,8 @@
 <odoo>
 
-    <!-- Vista LISTA (antes tree, ahora list en Odoo 18) -->
+    <!-- ========================= -->
+    <!-- Vista LISTA (Odoo 18) -->
+    <!-- ========================= -->
     <record id="view_rcv_import_list" model="ir.ui.view">
         <field name="name">l10n_cl.rcv.import.list</field>
         <field name="model">l10n_cl.rcv.import</field>
@@ -14,7 +16,9 @@
         </field>
     </record>
 
+    <!-- ========================= -->
     <!-- Vista FORMULARIO -->
+    <!-- ========================= -->
     <record id="view_rcv_import_form" model="ir.ui.view">
         <field name="name">l10n_cl.rcv.import.form</field>
         <field name="model">l10n_cl.rcv.import</field>
@@ -22,13 +26,21 @@
             <form string="Importación RCV SII">
                 <sheet>
 
-                    <!-- Botón superior -->
+                    <!-- Botones superiores -->
                     <header>
+                        <!-- Importación desde SII -->
                         <button
                             name="%(action_rcv_import_wizard)d"
                             string="Importar desde SII"
                             type="action"
                             class="btn-primary"/>
+
+                        <!-- Conciliación con Odoo -->
+                        <button
+                            name="action_reconcile_rcv"
+                            string="Conciliar con Odoo"
+                            type="object"
+                            class="btn-secondary"/>
                     </header>
 
                     <!-- Datos principales -->
