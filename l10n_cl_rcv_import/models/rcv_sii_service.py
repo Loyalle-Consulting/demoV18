@@ -17,21 +17,28 @@ class L10nClRcvSiiService(models.AbstractModel):
 
 
     # =========================================================
-    # PUBLICO – PASO 3B.4 + 3B.5
+    # PASO 3B.4 + 3B.5
     # =========================================================
     def fetch_rcv(self, company, year, month, import_type):
 
-        session = self._login_sii(company)
-        html = self._fetch_rcv_html(session, company, year, month, import_type)
-        documents = self._parse_rcv_html(html)
+        session, cert_files = self._login_sii(company)
 
-        # CHECKPOINT VISUAL (temporal)
-        raise UserError(_(
-            "RCV REAL consultado correctamente desde el SII.\n\n"
-            "Documentos detectados: %s\n\n"
-            "OPENSSL 3 + PFX LEGACY OK.\n"
-            "Siguiente paso: persistencia (3B.6)."
-        ) % len(documents))
+        try:
+            html = self._fetch_rcv_html(session, company, year, month, import_type)
+            documents = self._parse_rcv_html(html)
+
+            raise UserError(_(
+                "RCV REAL consultado correctamente desde el SII.\n\n"
+                "Documentos detectados: %s\n\n"
+                "OPENSSL 3 + PFX LEGACY OK.\n"
+                "Siguiente paso: persistencia (3B.6)."
+            ) % len(documents))
+
+        finally:
+            # 🔥 AHORA sí se pueden borrar
+            for f in cert_files:
+                if f and os.path.exists(f):
+                    os.unlink(f)
 
 
     # =========================================================
@@ -49,21 +56,19 @@ class L10nClRcvSiiService(models.AbstractModel):
         )
 
         if not cert:
-            raise UserError(_("No existe certificado SII vigente para esta empresa."))
+            raise UserError(_("No existe certificado SII vigente."))
 
         if not cert.content or not cert.pkcs12_password:
-            raise UserError(_("El certificado no tiene archivo PFX o contraseña."))
+            raise UserError(_("Certificado sin archivo o contraseña."))
 
         pfx_path = tempfile.mktemp(suffix=".pfx")
         pem_path = tempfile.mktemp(suffix=".pem")
         key_path = tempfile.mktemp(suffix=".key")
 
         try:
-            # Guardar PFX temporal
             with open(pfx_path, "wb") as f:
                 f.write(base64.b64decode(cert.content))
 
-            # Extraer certificado PEM (OpenSSL 3 requiere -legacy)
             subprocess.check_call([
                 "openssl", "pkcs12",
                 "-legacy",
@@ -74,7 +79,6 @@ class L10nClRcvSiiService(models.AbstractModel):
                 "-passin", f"pass:{cert.pkcs12_password}",
             ])
 
-            # Extraer clave privada KEY
             subprocess.check_call([
                 "openssl", "pkcs12",
                 "-legacy",
@@ -98,23 +102,19 @@ class L10nClRcvSiiService(models.AbstractModel):
             if resp.status_code != 200:
                 raise UserError(_("Login SII falló (HTTP %s)") % resp.status_code)
 
-            return session
+            # ⚠️ NO borrar archivos aquí
+            return session, (pfx_path, pem_path, key_path)
 
         except subprocess.CalledProcessError:
             raise UserError(_(
                 "Error al procesar el certificado PFX.\n\n"
-                "Este certificado usa algoritmos antiguos y requiere OpenSSL 3 en modo LEGACY.\n"
-                "Verifique que la contraseña sea correcta."
+                "Este certificado requiere OpenSSL 3 en modo LEGACY.\n"
+                "Verifique la contraseña."
             ))
-
-        finally:
-            for f in (pfx_path, pem_path, key_path):
-                if f and os.path.exists(f):
-                    os.unlink(f)
 
 
     # =========================================================
-    # CONSULTA RCV REAL (PASO 3B.4)
+    # CONSULTA RCV
     # =========================================================
     def _fetch_rcv_html(self, session, company, year, month, import_type):
 
@@ -123,7 +123,6 @@ class L10nClRcvSiiService(models.AbstractModel):
 
         rut = company.vat.replace(".", "").replace("-", "")
 
-        # MAPEO CORRECTO (FIX DEFINITIVO DEL ERROR 'purchase')
         tipo_map = {
             "purchase": "COMPRA",
             "sale": "VENTA",
@@ -134,9 +133,8 @@ class L10nClRcvSiiService(models.AbstractModel):
         }
 
         tipo = tipo_map.get((import_type or "").lower())
-
         if not tipo:
-            raise UserError(_("Tipo de importación no soportado: %s") % import_type)
+            raise UserError(_("Tipo de importación no válido: %s") % import_type)
 
         url = (
             "https://www4.sii.cl/consdcvinternetui/services/data/"
@@ -159,7 +157,7 @@ class L10nClRcvSiiService(models.AbstractModel):
 
 
     # =========================================================
-    # PARSEO HTML (PASO 3B.5)
+    # PARSEO HTML
     # =========================================================
     def _parse_rcv_html(self, html):
 
