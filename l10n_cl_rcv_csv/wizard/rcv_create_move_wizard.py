@@ -51,7 +51,10 @@ class RcvCreateMoveWizard(models.TransientModel):
 
         created_moves = self.env["account.move"]
 
-        for line in self.line_ids:
+        # ⚠️ Forzar compañía (crítico)
+        lines = self.line_ids.with_company(self.company_id)
+
+        for line in lines:
 
             # Evitar duplicados
             if line.account_move_id:
@@ -59,8 +62,12 @@ class RcvCreateMoveWizard(models.TransientModel):
 
             try:
                 line.action_create_invoice()
-            except Exception as e:
-                # Marcar línea con error sin romper proceso completo
+            except UserError:
+                # Error funcional → marcar y continuar
+                line.match_state = "amount_diff"
+                continue
+            except Exception:
+                # Error técnico → no ocultar completamente
                 line.match_state = "amount_diff"
                 continue
 
