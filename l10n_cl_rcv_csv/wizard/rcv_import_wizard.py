@@ -163,7 +163,7 @@ class RcvImportWizard(models.TransientModel):
                 ),
 
                 # -----------------------------
-                # Fechas
+                # Fechas (CRITERIO DEFINITIVO)
                 # -----------------------------
                 "invoice_date": self._to_date(
                     row.get("fecha_docto")
@@ -171,7 +171,7 @@ class RcvImportWizard(models.TransientModel):
                     or row.get("fecha_emision")
                 ),
 
-                "reception_date": self._to_date(
+                "accounting_date": self._to_date(
                     row.get("fecha_recepcion")
                 ),
 
