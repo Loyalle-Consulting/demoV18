@@ -3,6 +3,8 @@
 import base64
 import csv
 import io
+from datetime import datetime
+
 from odoo import models, _
 from odoo.exceptions import UserError
 
@@ -10,6 +12,8 @@ from odoo.exceptions import UserError
 class RcvCsvParser(models.AbstractModel):
     _name = "rcv.csv.parser"
     _description = "Parser CSV RCV SII (Compras y Ventas)"
+
+    DATE_FORMATS = ("%Y-%m-%d", "%d-%m-%Y")
 
     def parse(self, file_binary, rcv_type):
         """
@@ -37,6 +41,22 @@ class RcvCsvParser(models.AbstractModel):
         return rows
 
     # ---------------------------------------------------------
+    # UTILIDAD: parseo seguro de fechas
+    # ---------------------------------------------------------
+    def _parse_date(self, value):
+        if not value:
+            return None
+
+        value = value.strip()
+        for fmt in self.DATE_FORMATS:
+            try:
+                return datetime.strptime(value, fmt).date()
+            except ValueError:
+                continue
+
+        raise UserError(_("Formato de fecha inválido en CSV SII: %s") % value)
+
+    # ---------------------------------------------------------
     # NORMALIZACIÓN SEGÚN CSV OFICIAL SII
     # ---------------------------------------------------------
     def _normalize_row(self, row, rcv_type):
@@ -50,14 +70,22 @@ class RcvCsvParser(models.AbstractModel):
             except Exception:
                 return 0.0
 
+        fecha_emision = clean(row.get("Fecha Emisión"))
+        fecha_recepcion = clean(row.get("Fecha Recepción"))
+
         return {
+            # ---- EXISTENTE (NO SE TOCA) ----
             "rcv_type": rcv_type,
             "tipo_dte": clean(row.get("Tipo Doc")),
             "folio": clean(row.get("Folio")),
             "rut": clean(row.get("RUT Emisor") or row.get("RUT Receptor")),
             "razon_social": clean(row.get("Razón Social")),
-            "fecha": clean(row.get("Fecha Emisión")),
+            "fecha": fecha_emision,  # compatibilidad legacy
             "neto": to_float(row.get("Monto Neto")),
             "iva": to_float(row.get("IVA")),
             "total": to_float(row.get("Monto Total")),
+
+            # ---- NUEVO (PARA ODOO 18 / CONTABILIDAD) ----
+            "invoice_date": self._parse_date(fecha_emision),
+            "accounting_date": self._parse_date(fecha_recepcion),
         }
