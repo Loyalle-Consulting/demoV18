@@ -7,7 +7,9 @@ from odoo.exceptions import UserError
 class RcvLine(models.Model):
     _name = "rcv.line"
     _description = "Línea RCV SII"
-    _order = "invoice_date, folio"
+
+    # 🔴 AJUSTE CLAVE: evitar pérdida de fechas al crear
+    _order = "invoice_date asc nulls last, folio"
 
     # =====================================================
     # RELACIÓN CON LIBRO
@@ -46,14 +48,19 @@ class RcvLine(models.Model):
         string="Razón Social",
     )
 
+    # 🔴 AJUSTE CLAVE: forzar persistencia explícita
     invoice_date = fields.Date(
         string="Fecha Documento",
-        help="FchDoc del CSV SII",
+        help="Fecha Docto proveniente del CSV del SII",
+        store=True,
+        index=True,
     )
 
     accounting_date = fields.Date(
         string="Fecha Contable",
-        help="FchRecep del CSV SII (fecha contable en Odoo)",
+        help="Fecha Recepción (fecha contable) del CSV del SII",
+        store=True,
+        index=True,
     )
 
     # =====================================================
