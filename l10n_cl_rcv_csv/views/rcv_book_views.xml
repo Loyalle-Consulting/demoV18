@@ -1,6 +1,20 @@
 <odoo>
 
     <!-- ===================================================== -->
+    <!-- Acción: Libros RCV                                   -->
+    <!-- ===================================================== -->
+    <record id="action_rcv_book" model="ir.actions.act_window">
+        <field name="name">Libros RCV</field>
+        <field name="res_model">rcv.book</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Importa y gestiona los Libros RCV (Compras y Ventas) desde CSV del SII.
+            </p>
+        </field>
+    </record>
+
+    <!-- ===================================================== -->
     <!-- Vista LISTA Libros RCV                               -->
     <!-- ===================================================== -->
     <record id="view_rcv_book_tree" model="ir.ui.view">
@@ -41,7 +55,6 @@
                 </header>
 
                 <sheet>
-
                     <group col="4">
                         <field name="company_id" readonly="1"/>
                         <field name="year" readonly="1"/>
@@ -51,13 +64,9 @@
 
                     <notebook>
                         <page string="Líneas RCV">
-                            <field
-                                name="line_ids"
-                                context="{'default_book_id': active_id}"
-                            />
+                            <field name="line_ids"/>
                         </page>
                     </notebook>
-
                 </sheet>
             </form>
         </field>
