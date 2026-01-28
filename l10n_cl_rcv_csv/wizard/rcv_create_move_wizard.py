@@ -20,21 +20,11 @@ class RcvCreateMoveWizard(models.TransientModel):
         readonly=True,
     )
 
-    create_type = fields.Selection(
-        [
-            ("invoice", "Factura"),
-            ("refund", "Nota de Crédito"),
-        ],
-        string="Tipo de documento",
-        required=True,
-        default="invoice",
-    )
-
     journal_id = fields.Many2one(
         "account.journal",
         string="Diario contable",
         required=True,
-        domain="[('type', 'in', ('sale', 'purchase'))]",
+        domain="[('company_id', '=', company_id)]",
     )
 
     invoice_date = fields.Date(
@@ -77,11 +67,16 @@ class RcvCreateMoveWizard(models.TransientModel):
         for line in self.line_ids:
 
             if line.account_move_id:
-                continue  # ya conciliado
+                continue
 
             partner = self._get_or_create_partner(line)
+            move_type = self._get_move_type_from_dte(line)
 
-            move_type = self._get_move_type(line)
+            # Validar diario compatible
+            if move_type.startswith("out_") and self.journal_id.type != "sale":
+                raise UserError(_("Debe seleccionar un diario de VENTAS."))
+            if move_type.startswith("in_") and self.journal_id.type != "purchase":
+                raise UserError(_("Debe seleccionar un diario de COMPRAS."))
 
             move_vals = {
                 "move_type": move_type,
@@ -92,24 +87,17 @@ class RcvCreateMoveWizard(models.TransientModel):
                 "invoice_date_due": self.invoice_date,
                 "ref": f"RCV DTE {line.tipo_dte} Folio {line.folio}",
                 "invoice_line_ids": [
-                    (
-                        0,
-                        0,
-                        {
-                            "name": f"DTE {line.tipo_dte} Folio {line.folio}",
-                            "quantity": 1,
-                            "price_unit": line.net_amount or 0.0,
-                        },
-                    )
+                    (0, 0, {
+                        "name": f"DTE {line.tipo_dte} Folio {line.folio}",
+                        "quantity": 1,
+                        "price_unit": line.total_amount or 0.0,
+                    })
                 ],
             }
 
             move = self.env["account.move"].create(move_vals)
-
-            # Publicar factura
             move.action_post()
 
-            # Vinculación RCV ↔ factura
             line.account_move_id = move.id
             line.match_state = "created"
 
@@ -130,13 +118,14 @@ class RcvCreateMoveWizard(models.TransientModel):
     # HELPERS
     # ---------------------------------------------------------
 
-    def _get_move_type(self, line):
-        rcv_type = line.book_id.rcv_type
-
-        if rcv_type == "purchase":
-            return "in_refund" if self.create_type == "refund" else "in_invoice"
+    def _get_move_type_from_dte(self, line):
+        """
+        Determina el tipo de factura desde el DTE real SII
+        """
+        if line.book_id.rcv_type == "purchase":
+            return "in_refund" if line.tipo_dte == "61" else "in_invoice"
         else:
-            return "out_refund" if self.create_type == "refund" else "out_invoice"
+            return "out_refund" if line.tipo_dte == "61" else "out_invoice"
 
     def _get_or_create_partner(self, line):
         Partner = self.env["res.partner"]
@@ -150,7 +139,7 @@ class RcvCreateMoveWizard(models.TransientModel):
             return partner
 
         return Partner.create({
-            "name": line.partner_name or _("Proveedor/Cliente RCV"),
+            "name": line.partner_name or _("Tercero RCV"),
             "vat": line.partner_vat,
             "company_type": "company",
         })
