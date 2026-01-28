@@ -1,18 +1,16 @@
-# -*- coding: utf-8 -*-
-
-from odoo import models, fields, _
+from odoo import models, fields
 
 
 class RcvBook(models.Model):
     _name = "rcv.book"
-    _description = "Libro RCV CSV SII"
+    _description = "Libro RCV SII"
     _order = "year desc, month desc"
 
     company_id = fields.Many2one(
         "res.company",
-        string="Empresa",
         required=True,
         default=lambda self: self.env.company,
+        ondelete="cascade",
     )
 
     year = fields.Integer(
@@ -20,8 +18,7 @@ class RcvBook(models.Model):
         required=True,
     )
 
-    month = fields.Selection(
-        [(str(i), str(i)) for i in range(1, 13)],
+    month = fields.Integer(
         string="Mes",
         required=True,
     )
@@ -31,20 +28,19 @@ class RcvBook(models.Model):
             ("purchase", "Compras"),
             ("sale", "Ventas"),
         ],
-        string="Tipo RCV",
+        string="Tipo Libro",
         required=True,
     )
 
     state = fields.Selection(
         [
-            ("draft", "Borrador"),
             ("imported", "Importado"),
-            ("compared", "Conciliado"),
+            ("compared", "Comparado"),
             ("posted", "Facturas creadas"),
         ],
         string="Estado",
         default="imported",
-        tracking=True,
+        required=True,
     )
 
     line_ids = fields.One2many(
@@ -52,15 +48,3 @@ class RcvBook(models.Model):
         "book_id",
         string="Líneas RCV",
     )
-
-    # ======================================================
-    # ACCIÓN: Conciliar con Contabilidad
-    # (stub inicial, lógica real se agrega después)
-    # ======================================================
-    def action_reconcile_with_accounting(self):
-        """
-        Conciliación RCV vs contabilidad Odoo.
-        Por ahora solo cambia estado para permitir instalación.
-        """
-        for book in self:
-            book.state = "compared"
