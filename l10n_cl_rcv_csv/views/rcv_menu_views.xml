@@ -1,0 +1,35 @@
+<odoo>
+
+    <!-- ===================================================== -->
+    <!-- Menú raíz RCV (bajo Contabilidad)                     -->
+    <!-- ===================================================== -->
+    <menuitem
+        id="menu_rcv_root"
+        name="RCV Chile"
+        parent="account.menu_finance"
+        sequence="60"
+    />
+
+    <!-- ===================================================== -->
+    <!-- Libros RCV                                            -->
+    <!-- ===================================================== -->
+    <menuitem
+        id="menu_rcv_books"
+        name="Libros RCV"
+        parent="menu_rcv_root"
+        action="action_rcv_book"
+        sequence="10"
+    />
+
+    <!-- ===================================================== -->
+    <!-- Importar CSV RCV                                      -->
+    <!-- ===================================================== -->
+    <menuitem
+        id="menu_rcv_import"
+        name="Importar RCV (CSV SII)"
+        parent="menu_rcv_root"
+        action="action_rcv_import_wizard"
+        sequence="20"
+    />
+
+</odoo>

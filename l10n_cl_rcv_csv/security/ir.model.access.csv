@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_rcv_book,access_rcv_book,model_rcv_book,,1,0,1,0
+access_rcv_line,access_rcv_line,model_rcv_line,,1,1,1,0
+access_rcv_import_wizard,access_rcv_import_wizard,model_rcv_import_wizard,,1,1,1,0
+access_rcv_create_move_wizard,access_rcv_create_move_wizard,model_rcv_create_move_wizard,,1,1,1,0
+access_rcv_csv_parser,access_rcv_csv_parser,model_rcv_csv_parser,,1,0,0,0

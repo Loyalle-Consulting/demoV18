@@ -1,0 +1,66 @@
+<odoo>
+
+    <!-- ===================================================== -->
+    <!-- Vista LISTA Libros RCV                               -->
+    <!-- ===================================================== -->
+    <record id="view_rcv_book_tree" model="ir.ui.view">
+        <field name="name">rcv.book.tree</field>
+        <field name="model">rcv.book</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="company_id"/>
+                <field name="year"/>
+                <field name="month"/>
+                <field name="rcv_type"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ===================================================== -->
+    <!-- Vista FORMULARIO Libro RCV                           -->
+    <!-- ===================================================== -->
+    <record id="view_rcv_book_form" model="ir.ui.view">
+        <field name="name">rcv.book.form</field>
+        <field name="model">rcv.book</field>
+        <field name="arch" type="xml">
+            <form string="Libro RCV">
+                <header>
+                    <button
+                        name="action_reconcile_with_accounting"
+                        type="object"
+                        string="Conciliar con Contabilidad"
+                        class="btn-primary"
+                        attrs="{'invisible': [('state', '=', 'posted')]}"
+                    />
+                    <field
+                        name="state"
+                        widget="statusbar"
+                        statusbar_visible="imported,compared,posted"
+                    />
+                </header>
+
+                <sheet>
+
+                    <group col="4">
+                        <field name="company_id" readonly="1"/>
+                        <field name="year" readonly="1"/>
+                        <field name="month" readonly="1"/>
+                        <field name="rcv_type" readonly="1"/>
+                    </group>
+
+                    <notebook>
+                        <page string="Líneas RCV">
+                            <field
+                                name="line_ids"
+                                context="{'default_book_id': active_id}"
+                            />
+                        </page>
+                    </notebook>
+
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,46 @@
+<odoo>
+
+    <!-- Acción del wizard -->
+    <record id="action_rcv_create_move_wizard" model="ir.actions.act_window">
+        <field name="name">Crear Facturas desde RCV</field>
+        <field name="res_model">rcv.create.move.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{}</field>
+    </record>
+
+    <!-- Vista del wizard -->
+    <record id="view_rcv_create_move_wizard_form" model="ir.ui.view">
+        <field name="name">rcv.create.move.wizard.form</field>
+        <field name="model">rcv.create.move.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Crear Facturas desde RCV">
+                <sheet>
+
+                    <group>
+                        <field name="company_id" readonly="1"/>
+                        <field name="create_type"/>
+                        <field name="journal_id"/>
+                        <field name="invoice_date"/>
+                    </group>
+
+                    <group>
+                        <field name="line_ids" widget="many2many_tags" readonly="1"/>
+                    </group>
+
+                </sheet>
+
+                <footer>
+                    <button
+                        name="action_create_moves"
+                        type="object"
+                        string="Crear Facturas"
+                        class="btn-primary"
+                    />
+                    <button string="Cancelar" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>
