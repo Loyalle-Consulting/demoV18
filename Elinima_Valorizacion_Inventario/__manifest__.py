@@ -1,5 +1,6 @@
 {
     "name": "Elinima_Valorizacion_Inventario",
+    "license": "LGPL-3",
     "version": "1.0",
     "category": "Inventory",
     "author": "Loyalle Consulting",
