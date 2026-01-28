@@ -50,6 +50,19 @@ class RcvCreateMoveWizard(models.TransientModel):
     )
 
     # ---------------------------------------------------------
+    # DEFAULTS
+    # ---------------------------------------------------------
+
+    def default_get(self, fields_list):
+        res = super().default_get(fields_list)
+
+        active_ids = self.env.context.get("active_ids")
+        if active_ids:
+            res["line_ids"] = [(6, 0, active_ids)]
+
+        return res
+
+    # ---------------------------------------------------------
     # ACCIÓN PRINCIPAL
     # ---------------------------------------------------------
 
@@ -77,21 +90,23 @@ class RcvCreateMoveWizard(models.TransientModel):
                 "journal_id": self.journal_id.id,
                 "invoice_date": self.invoice_date,
                 "invoice_date_due": self.invoice_date,
-                "ref": f"RCV {line.document_type}-{line.folio}",
+                "ref": f"RCV DTE {line.tipo_dte} Folio {line.folio}",
                 "invoice_line_ids": [
                     (
                         0,
                         0,
                         {
-                            "name": f"RCV {line.document_type} {line.folio}",
+                            "name": f"DTE {line.tipo_dte} Folio {line.folio}",
                             "quantity": 1,
-                            "price_unit": line.total_amount,
+                            "price_unit": line.net_amount or 0.0,
                         },
                     )
                 ],
             }
 
             move = self.env["account.move"].create(move_vals)
+
+            # Publicar factura
             move.action_post()
 
             # Vinculación RCV ↔ factura
@@ -116,7 +131,9 @@ class RcvCreateMoveWizard(models.TransientModel):
     # ---------------------------------------------------------
 
     def _get_move_type(self, line):
-        if line.rcv_type == "purchase":
+        rcv_type = line.book_id.rcv_type
+
+        if rcv_type == "purchase":
             return "in_refund" if self.create_type == "refund" else "in_invoice"
         else:
             return "out_refund" if self.create_type == "refund" else "out_invoice"
