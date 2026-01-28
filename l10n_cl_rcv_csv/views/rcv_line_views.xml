@@ -1,18 +1,13 @@
 <odoo>
 
-    <!-- ========================= -->
-    <!-- Vista LISTA -->
-    <!-- ========================= -->
+    <!-- Vista lista -->
     <record id="view_rcv_line_tree" model="ir.ui.view">
         <field name="name">rcv.line.tree</field>
         <field name="model">rcv.line</field>
         <field name="arch" type="xml">
             <list>
-                <field name="document_type"/>
-                <field name="folio"/>
                 <field name="partner_vat"/>
                 <field name="partner_name"/>
-                <field name="document_date"/>
                 <field name="total_amount"/>
                 <field name="match_state"/>
                 <field name="account_move_id"/>
@@ -20,9 +15,7 @@
         </field>
     </record>
 
-    <!-- ========================= -->
-    <!-- Vista FORMULARIO -->
-    <!-- ========================= -->
+    <!-- Vista formulario -->
     <record id="view_rcv_line_form" model="ir.ui.view">
         <field name="name">rcv.line.form</field>
         <field name="model">rcv.line</field>
@@ -30,23 +23,13 @@
             <form string="Línea RCV">
                 <sheet>
                     <group>
-                        <field name="book_id"/>
-                        <field name="document_type"/>
-                        <field name="folio"/>
                         <field name="partner_vat"/>
                         <field name="partner_name"/>
-                        <field name="document_date"/>
-                    </group>
-
-                    <group>
                         <field name="net_amount"/>
                         <field name="tax_amount"/>
                         <field name="total_amount"/>
-                    </group>
-
-                    <group>
-                        <field name="match_state" readonly="1"/>
-                        <field name="account_move_id" readonly="1"/>
+                        <field name="match_state"/>
+                        <field name="account_move_id"/>
                     </group>
                 </sheet>
             </form>
