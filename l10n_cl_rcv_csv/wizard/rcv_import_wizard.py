@@ -78,7 +78,7 @@ class RcvImportWizard(models.TransientModel):
     def _to_date(self, value):
         if not value:
             return False
-        for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y"):
             try:
                 return datetime.strptime(value, fmt).date()
             except Exception:
@@ -109,7 +109,7 @@ class RcvImportWizard(models.TransientModel):
         # Leer CSV
         # -----------------------------------------------------
         decoded = base64.b64decode(self.csv_file)
-        content = decoded.decode("utf-8", errors="ignore")
+        content = decoded.decode("latin-1", errors="ignore")
 
         reader = csv.DictReader(
             StringIO(content),
@@ -130,12 +130,9 @@ class RcvImportWizard(models.TransientModel):
             for key, value in raw_row.items():
                 if not key:
                     continue
-
                 clean_key = self._clean_header(key)
-                if not clean_key:
-                    continue
-
-                row[clean_key] = self._clean_value(value)
+                if clean_key:
+                    row[clean_key] = self._clean_value(value)
 
             Line.create({
                 "book_id": book.id,
@@ -144,45 +141,53 @@ class RcvImportWizard(models.TransientModel):
                 # Documento
                 # -----------------------------
                 "tipo_dte": (
-                    row.get("tipo_doc")
+                    row.get("tipodoc")
+                    or row.get("tipo_doc")
                     or row.get("tipo_documento")
-                    or row.get("tipo_dte")
+                    or row.get("tipodte")
                 ),
 
                 "folio": row.get("folio"),
 
                 "partner_vat": (
-                    row.get("rut_emisor")
+                    row.get("rutdoc")
+                    or row.get("rut_emisor")
                     or row.get("rut_proveedor")
                     or row.get("rut_cliente")
                 ),
 
                 "partner_name": (
-                    row.get("razon_social")
+                    row.get("rznsoc")
+                    or row.get("razon_social")
                     or row.get("razon_social_emisor")
                 ),
 
                 # -----------------------------
-                # Fechas (CRITERIO DEFINITIVO)
+                # FECHAS – CLAVES REALES SII
                 # -----------------------------
                 "invoice_date": self._to_date(
-                    row.get("fecha_docto")
-                    or row.get("fecha_documento")
+                    row.get("fchdoc")
                     or row.get("fecha_emision")
+                    or row.get("fecha_documento")
                 ),
 
                 "accounting_date": self._to_date(
-                    row.get("fecha_recepcion")
+                    row.get("fchrecep")
+                    or row.get("fecha_recepcion")
                 ),
 
                 # -----------------------------
                 # Montos
                 # -----------------------------
-                "net_amount": self._to_float(row.get("monto_neto")),
-                "tax_amount": self._to_float(
-                    row.get("monto_iva") or row.get("iva")
+                "net_amount": self._to_float(
+                    row.get("mntneto") or row.get("monto_neto")
                 ),
-                "total_amount": self._to_float(row.get("monto_total")),
+                "tax_amount": self._to_float(
+                    row.get("iva") or row.get("monto_iva")
+                ),
+                "total_amount": self._to_float(
+                    row.get("mnttotal") or row.get("monto_total")
+                ),
 
                 "match_state": "not_found",
             })
