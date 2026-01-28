@@ -2,7 +2,7 @@
 
 import base64
 import csv
-import io
+from io import StringIO
 from datetime import datetime
 
 from odoo import models, fields, _
@@ -38,13 +38,48 @@ class RcvImportWizard(models.TransientModel):
     filename = fields.Char()
 
     # ---------------------------------------------------------
+    # UTILIDADES
+    # ---------------------------------------------------------
+    def _clean_header(self, value):
+        """Normaliza encabezados del CSV del SII"""
+        return (
+            value.strip()
+            .lower()
+            .replace(" ", "_")
+            .replace("á", "a")
+            .replace("é", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ú", "u")
+        )
+
+    def _to_float(self, value):
+        """Convierte montos tipo SII a float"""
+        if not value:
+            return 0.0
+        return float(
+            value.replace(".", "").replace(",", ".").replace("$", "").strip()
+        )
+
+    def _to_date(self, value):
+        """Convierte fechas del SII"""
+        if not value:
+            return False
+        for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(value.strip(), fmt).date()
+            except Exception:
+                continue
+        return False
+
+    # ---------------------------------------------------------
     # ACCIÓN PRINCIPAL
     # ---------------------------------------------------------
     def action_import(self):
         self.ensure_one()
 
         if not self.csv_file:
-            raise UserError(_("Debe seleccionar un archivo CSV."))
+            raise UserError(_("Debe seleccionar un archivo CSV del SII."))
 
         # -----------------------------------------------------
         # Crear libro RCV
@@ -61,51 +96,75 @@ class RcvImportWizard(models.TransientModel):
         # Leer CSV
         # -----------------------------------------------------
         decoded = base64.b64decode(self.csv_file)
-        data = io.StringIO(decoded.decode("utf-8", errors="ignore"))
-        reader = csv.DictReader(data, delimiter=";")
+        content = decoded.decode("utf-8", errors="ignore")
+
+        reader = csv.DictReader(
+            StringIO(content),
+            delimiter=";"
+        )
+
+        if not reader.fieldnames:
+            raise UserError(_("El archivo CSV no contiene encabezados válidos."))
+
+        # Normalizar headers
+        normalized_headers = {
+            self._clean_header(h): h for h in reader.fieldnames
+        }
 
         Line = self.env["rcv.line"]
 
-        for row in reader:
-            # --- Conversión de montos ---
-            def _to_float(val):
-                if not val:
-                    return 0.0
-                return float(val.replace(".", "").replace(",", "."))
+        # -----------------------------------------------------
+        # Procesar líneas
+        # -----------------------------------------------------
+        for raw_row in reader:
+            row = {}
+            for key, value in raw_row.items():
+                row[self._clean_header(key)] = (value or "").strip()
 
-            net = _to_float(row.get("Monto Neto"))
-            tax = _to_float(row.get("IVA"))
-            total = _to_float(row.get("Monto Total"))
-
-            # --- Fecha ---
-            date_str = row.get("Fecha Documento")
-            invoice_date = False
-            if date_str:
-                try:
-                    invoice_date = datetime.strptime(date_str, "%d-%m-%Y").date()
-                except Exception:
-                    pass
-
-            # -------------------------------------------------
-            # CREAR LÍNEA RCV
-            # -------------------------------------------------
             Line.create({
                 "book_id": book.id,
-                "tipo_dte": row.get("Tipo Documento"),
-                "folio": row.get("Folio"),
-                "partner_vat": row.get("RUT Proveedor") or row.get("RUT Cliente"),
-                "partner_name": row.get("Razón Social"),
-                "invoice_date": invoice_date,
-                "net_amount": net,
-                "tax_amount": tax,
-                "total_amount": total,
 
-                # 🔴 CLAVE: estado válido según el modelo
+                # Datos documento
+                "tipo_dte": (
+                    row.get("tipo_doc")
+                    or row.get("tipo_documento")
+                ),
+                "folio": row.get("folio"),
+
+                # Partner
+                "partner_vat": (
+                    row.get("rut_emisor")
+                    or row.get("rut_proveedor")
+                    or row.get("rut_cliente")
+                ),
+                "partner_name": (
+                    row.get("razon_social")
+                    or row.get("razon_social_emisor")
+                ),
+
+                # Fechas
+                "invoice_date": self._to_date(
+                    row.get("fecha_emision")
+                    or row.get("fecha_documento")
+                ),
+
+                # Montos
+                "net_amount": self._to_float(
+                    row.get("monto_neto")
+                ),
+                "tax_amount": self._to_float(
+                    row.get("iva")
+                ),
+                "total_amount": self._to_float(
+                    row.get("monto_total")
+                ),
+
+                # Estado conciliación
                 "match_state": "not_found",
             })
 
         # -----------------------------------------------------
-        # Volver al libro creado
+        # Abrir libro creado
         # -----------------------------------------------------
         return {
             "type": "ir.actions.act_window",
