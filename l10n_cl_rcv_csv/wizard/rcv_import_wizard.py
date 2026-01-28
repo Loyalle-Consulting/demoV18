@@ -38,17 +38,14 @@ class RcvImportWizard(models.TransientModel):
     filename = fields.Char()
 
     # ---------------------------------------------------------
-    # UTILIDADES ROBUSTAS CSV SII
+    # UTILIDADES CSV (BASE FUNCIONAL)
     # ---------------------------------------------------------
     def _clean_header(self, value):
         if not value:
             return None
-
-        # 🔴 FIX CLAVE: eliminar BOM invisible del SII
-        value = value.lstrip("\ufeff")
-
         return (
             str(value)
+            .lstrip("\ufeff")          # BOM típico del SII
             .strip()
             .lower()
             .replace(" ", "_")
@@ -62,6 +59,8 @@ class RcvImportWizard(models.TransientModel):
     def _clean_value(self, value):
         if value is None:
             return ""
+        if isinstance(value, list):
+            return " ".join([str(v) for v in value if v]).strip()
         return str(value).strip()
 
     def _to_float(self, value):
@@ -80,7 +79,7 @@ class RcvImportWizard(models.TransientModel):
     def _to_date(self, value):
         if not value:
             return False
-        for fmt in ("%Y-%m-%d", "%d-%m-%Y"):
+        for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
             try:
                 return datetime.strptime(value, fmt).date()
             except Exception:
@@ -96,6 +95,9 @@ class RcvImportWizard(models.TransientModel):
         if not self.csv_file:
             raise UserError(_("Debe seleccionar un archivo CSV del SII."))
 
+        # -----------------------------------------------------
+        # Crear libro RCV
+        # -----------------------------------------------------
         book = self.env["rcv.book"].create({
             "company_id": self.company_id.id,
             "year": self.year,
@@ -104,18 +106,28 @@ class RcvImportWizard(models.TransientModel):
             "state": "imported",
         })
 
+        # -----------------------------------------------------
+        # Leer CSV
+        # -----------------------------------------------------
         decoded = base64.b64decode(self.csv_file)
         content = decoded.decode("latin-1", errors="ignore")
 
-        reader = csv.DictReader(StringIO(content), delimiter=";")
+        reader = csv.DictReader(
+            StringIO(content),
+            delimiter=";"
+        )
 
         if not reader.fieldnames:
             raise UserError(_("El archivo CSV no contiene encabezados válidos."))
 
         Line = self.env["rcv.line"]
 
+        # -----------------------------------------------------
+        # Procesar líneas (BASE FUNCIONAL + FECHAS)
+        # -----------------------------------------------------
         for raw_row in reader:
             row = {}
+
             for key, value in raw_row.items():
                 clean_key = self._clean_header(key)
                 if clean_key:
@@ -124,11 +136,14 @@ class RcvImportWizard(models.TransientModel):
             Line.create({
                 "book_id": book.id,
 
-                # Documento
+                # -----------------------------
+                # Documento (NO TOCAR)
+                # -----------------------------
                 "tipo_dte": (
-                    row.get("tipodte")
-                    or row.get("tipodoc")
+                    row.get("tipodoc")
                     or row.get("tipo_doc")
+                    or row.get("tipo_documento")
+                    or row.get("tipodte")
                 ),
 
                 "folio": row.get("folio"),
@@ -136,25 +151,41 @@ class RcvImportWizard(models.TransientModel):
                 "partner_vat": (
                     row.get("rutdoc")
                     or row.get("rut_emisor")
+                    or row.get("rut_proveedor")
+                    or row.get("rut_cliente")
                 ),
 
                 "partner_name": (
                     row.get("rznsoc")
                     or row.get("razon_social")
+                    or row.get("razon_social_emisor")
                 ),
 
-                # 🔑 FECHAS SII (YA FUNCIONAN)
-                "invoice_date": self._to_date(row.get("fchdoc")),
-                "accounting_date": self._to_date(row.get("fchrecep")),
+                # -----------------------------
+                # FECHAS (CLAVES REALES DEL CSV SII)
+                # -----------------------------
+                "invoice_date": self._to_date(row.get("fecha_docto")),
+                "accounting_date": self._to_date(row.get("fecha_recepcion")),
 
-                # Montos
-                "net_amount": self._to_float(row.get("mntneto")),
-                "tax_amount": self._to_float(row.get("iva")),
-                "total_amount": self._to_float(row.get("mnttotal")),
+                # -----------------------------
+                # Montos (NO TOCAR)
+                # -----------------------------
+                "net_amount": self._to_float(
+                    row.get("mntneto") or row.get("monto_neto")
+                ),
+                "tax_amount": self._to_float(
+                    row.get("iva") or row.get("monto_iva")
+                ),
+                "total_amount": self._to_float(
+                    row.get("mnttotal") or row.get("monto_total")
+                ),
 
                 "match_state": "not_found",
             })
 
+        # -----------------------------------------------------
+        # Abrir libro creado
+        # -----------------------------------------------------
         return {
             "type": "ir.actions.act_window",
             "name": _("Libro RCV"),
