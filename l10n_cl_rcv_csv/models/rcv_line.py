@@ -4,11 +4,7 @@ from odoo import models, fields
 class RcvLine(models.Model):
     _name = "rcv.line"
     _description = "Línea RCV SII"
-    _order = "document_date, folio"
-
-    # =====================================================
-    # RELACIONES
-    # =====================================================
+    _order = "invoice_date, folio"
 
     book_id = fields.Many2one(
         "rcv.book",
@@ -17,29 +13,12 @@ class RcvLine(models.Model):
         ondelete="cascade",
     )
 
-    company_id = fields.Many2one(
-        related="book_id.company_id",
-        store=True,
-        readonly=True,
-    )
-
-    # =====================================================
-    # IDENTIFICACIÓN DOCUMENTO
-    # =====================================================
-
-    rcv_type = fields.Selection(
-        [
-            ("purchase", "Compras"),
-            ("sale", "Ventas"),
-        ],
-        string="Tipo Libro",
-        required=True,
-        index=True,
-    )
-
-    document_type = fields.Char(
-        string="Tipo Documento",
-        required=True,
+    # ===============================
+    # Datos documento SII
+    # ===============================
+    tipo_dte = fields.Char(
+        string="Tipo DTE",
+        help="Código DTE según SII (33, 34, 61, etc.)",
     )
 
     folio = fields.Char(
@@ -49,21 +28,19 @@ class RcvLine(models.Model):
 
     partner_vat = fields.Char(
         string="RUT",
-        index=True,
     )
 
     partner_name = fields.Char(
         string="Razón Social",
     )
 
-    document_date = fields.Date(
+    invoice_date = fields.Date(
         string="Fecha Documento",
     )
 
-    # =====================================================
-    # MONTOS
-    # =====================================================
-
+    # ===============================
+    # Montos
+    # ===============================
     net_amount = fields.Monetary(
         string="Neto",
     )
@@ -74,20 +51,18 @@ class RcvLine(models.Model):
 
     total_amount = fields.Monetary(
         string="Total",
-        required=True,
     )
 
     currency_id = fields.Many2one(
         "res.currency",
         string="Moneda",
-        required=True,
         default=lambda self: self.env.company.currency_id,
+        required=True,
     )
 
-    # =====================================================
-    # CONCILIACIÓN CONTABLE
-    # =====================================================
-
+    # ===============================
+    # Conciliación
+    # ===============================
     match_state = fields.Selection(
         [
             ("not_found", "No existe en Odoo"),
@@ -97,12 +72,11 @@ class RcvLine(models.Model):
         ],
         string="Estado Conciliación",
         default="not_found",
-        index=True,
+        required=True,
     )
 
     account_move_id = fields.Many2one(
         "account.move",
         string="Factura Odoo",
         readonly=True,
-        ondelete="set null",
     )
