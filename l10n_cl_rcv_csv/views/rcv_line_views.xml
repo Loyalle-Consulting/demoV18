@@ -1,63 +1,72 @@
 <odoo>
 
-    <!-- ============================= -->
+    <!-- ================================================= -->
     <!-- Vista lista (tree) -->
-    <!-- ============================= -->
+    <!-- ================================================= -->
     <record id="view_rcv_line_tree" model="ir.ui.view">
         <field name="name">rcv.line.tree</field>
         <field name="model">rcv.line</field>
         <field name="arch" type="xml">
-            <list>
+            <list
+                multi="True"
+                decoration-success="match_state == 'matched'"
+                decoration-warning="match_state == 'amount_diff'"
+                decoration-info="match_state == 'created'"
+                decoration-danger="match_state == 'not_found'"
+            >
 
                 <!-- Documento -->
-                <field name="tipo_dte" string="Tipo Doc"/>
-                <field name="folio"/>
+                <field name="tipo_dte" string="DTE" width="60"/>
+                <field name="folio" width="100"/>
+                <field name="invoice_date"/>
 
                 <!-- Cliente / Proveedor -->
                 <field name="partner_vat" string="RUT"/>
                 <field name="partner_name" string="Razón Social"/>
 
                 <!-- Montos -->
-                <field name="total_amount" string="Total"/>
+                <field name="net_amount"/>
+                <field name="tax_amount"/>
+                <field name="total_amount"/>
 
                 <!-- Conciliación -->
-                <field name="match_state" string="Estado Conciliación"/>
+                <field name="match_state" string="Estado"/>
                 <field name="account_move_id" string="Factura Odoo"/>
 
             </list>
         </field>
     </record>
 
-    <!-- ============================= -->
+    <!-- ================================================= -->
     <!-- Vista formulario -->
-    <!-- ============================= -->
+    <!-- ================================================= -->
     <record id="view_rcv_line_form" model="ir.ui.view">
         <field name="name">rcv.line.form</field>
         <field name="model">rcv.line</field>
         <field name="arch" type="xml">
-            <form>
+            <form string="Línea RCV">
                 <sheet>
 
-                    <group string="Documento">
-                        <field name="tipo_dte"/>
-                        <field name="folio"/>
-                        <field name="invoice_date"/>
+                    <group string="Documento SII" col="3">
+                        <field name="tipo_dte" readonly="1"/>
+                        <field name="folio" readonly="1"/>
+                        <field name="invoice_date" readonly="1"/>
                     </group>
 
-                    <group string="Entidad">
-                        <field name="partner_vat"/>
-                        <field name="partner_name"/>
+                    <group string="Entidad" col="2">
+                        <field name="partner_vat" readonly="1"/>
+                        <field name="partner_name" readonly="1"/>
                     </group>
 
-                    <group string="Montos">
-                        <field name="net_amount"/>
-                        <field name="tax_amount"/>
-                        <field name="total_amount"/>
+                    <group string="Montos" col="3">
+                        <field name="net_amount" readonly="1"/>
+                        <field name="tax_amount" readonly="1"/>
+                        <field name="total_amount" readonly="1"/>
                     </group>
 
-                    <group string="Conciliación">
-                        <field name="match_state"/>
-                        <field name="account_move_id"/>
+                    <group string="Conciliación" col="2">
+                        <field name="match_state" readonly="1"/>
+                        <field name="account_move_id" readonly="1"/>
                     </group>
 
                 </sheet>
