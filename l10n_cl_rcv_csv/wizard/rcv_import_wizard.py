@@ -1,55 +1,55 @@
 # -*- coding: utf-8 -*-
 
+import base64
+import csv
+import io
+from datetime import datetime
+
 from odoo import models, fields, _
 from odoo.exceptions import UserError
 
 
 class RcvImportWizard(models.TransientModel):
     _name = "rcv.import.wizard"
-    _description = "Importar CSV RCV SII"
+    _description = "Importar Libro RCV desde CSV SII"
 
     company_id = fields.Many2one(
         "res.company",
-        string="Empresa",
         required=True,
         default=lambda self: self.env.company,
     )
 
-    year = fields.Integer(string="Año", required=True)
-    month = fields.Selection(
-        [(str(i), str(i)) for i in range(1, 13)],
-        string="Mes",
-        required=True,
-    )
+    year = fields.Integer(required=True)
+    month = fields.Integer(required=True)
 
     rcv_type = fields.Selection(
         [
             ("purchase", "Compras"),
             ("sale", "Ventas"),
         ],
-        string="Tipo de libro",
         required=True,
     )
 
     csv_file = fields.Binary(
-        string="Archivo CSV SII",
+        string="Archivo CSV RCV",
         required=True,
     )
 
-    filename = fields.Char(string="Nombre archivo")
+    filename = fields.Char()
 
     # ---------------------------------------------------------
-    # ACCIÓN
+    # ACCIÓN PRINCIPAL
     # ---------------------------------------------------------
     def action_import(self):
         self.ensure_one()
 
-        Book = self.env["rcv.book"]
-        Line = self.env["rcv.line"]
-        parser = self.env["rcv.csv.parser"]
+        if not self.csv_file:
+            raise UserError(_("Debe seleccionar un archivo CSV."))
 
+        # -----------------------------------------------------
         # Crear libro RCV
-        book = Book.create({
+        # -----------------------------------------------------
+        book = self.env["rcv.book"].create({
             "company_id": self.company_id.id,
             "year": self.year,
             "month": self.month,
@@ -57,27 +57,61 @@ class RcvImportWizard(models.TransientModel):
             "state": "imported",
         })
 
-        rows = parser.parse(self.csv_file, self.rcv_type)
+        # -----------------------------------------------------
+        # Leer CSV
+        # -----------------------------------------------------
+        decoded = base64.b64decode(self.csv_file)
+        data = io.StringIO(decoded.decode("utf-8", errors="ignore"))
+        reader = csv.DictReader(data, delimiter=";")
 
-        for row in rows:
+        Line = self.env["rcv.line"]
+
+        for row in reader:
+            # --- Conversión de montos ---
+            def _to_float(val):
+                if not val:
+                    return 0.0
+                return float(val.replace(".", "").replace(",", "."))
+
+            net = _to_float(row.get("Monto Neto"))
+            tax = _to_float(row.get("IVA"))
+            total = _to_float(row.get("Monto Total"))
+
+            # --- Fecha ---
+            date_str = row.get("Fecha Documento")
+            invoice_date = False
+            if date_str:
+                try:
+                    invoice_date = datetime.strptime(date_str, "%d-%m-%Y").date()
+                except Exception:
+                    pass
+
+            # -------------------------------------------------
+            # CREAR LÍNEA RCV
+            # -------------------------------------------------
             Line.create({
                 "book_id": book.id,
-                "rcv_type": row["rcv_type"],
-                "document_type": row["tipo_dte"],
-                "folio": row["folio"],
-                "partner_vat": row["rut"],
-                "partner_name": row["razon_social"],
-                "document_date": row["fecha"],
-                "net_amount": row["neto"],
-                "tax_amount": row["iva"],
-                "total_amount": row["total"],
-                "match_state": "not_checked",
+                "tipo_dte": row.get("Tipo Documento"),
+                "folio": row.get("Folio"),
+                "partner_vat": row.get("RUT Proveedor") or row.get("RUT Cliente"),
+                "partner_name": row.get("Razón Social"),
+                "invoice_date": invoice_date,
+                "net_amount": net,
+                "tax_amount": tax,
+                "total_amount": total,
+
+                # 🔴 CLAVE: estado válido según el modelo
+                "match_state": "not_found",
             })
 
+        # -----------------------------------------------------
+        # Volver al libro creado
+        # -----------------------------------------------------
         return {
             "type": "ir.actions.act_window",
-            "name": _("Libro RCV importado"),
+            "name": _("Libro RCV"),
             "res_model": "rcv.book",
             "view_mode": "form",
             "res_id": book.id,
+            "target": "current",
         }
