@@ -1,8 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <odoo>
 
-    <!-- ========================================= -->
-    <!-- Acción masiva: Crear facturas desde RCV -->
-    <!-- ========================================= -->
     <record id="action_rcv_create_moves" model="ir.actions.server">
         <field name="name">Crear Facturas desde RCV</field>
         <field name="model_id" ref="model_rcv_line"/>
@@ -19,7 +17,6 @@ action = {
     "context": {
         "active_model": "rcv.line",
         "active_ids": records.ids,
-        "active_id": records.ids and records.ids[0] or False,
     },
 }
         </field>
