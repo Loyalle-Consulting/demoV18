@@ -1,7 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <odoo>
 
     <!-- ============================= -->
-    <!-- Vista lista (tree) -->
+    <!-- Vista lista -->
     <!-- ============================= -->
     <record id="view_rcv_line_tree" model="ir.ui.view">
         <field name="name">rcv.line.tree</field>
@@ -12,6 +13,10 @@
                 <!-- Documento -->
                 <field name="tipo_dte" string="DTE"/>
                 <field name="folio"/>
+
+                <!-- Fechas -->
+                <field name="invoice_date" string="Fecha Documento"/>
+                <field name="accounting_date" string="Fecha Contable"/>
 
                 <!-- Cliente / Proveedor -->
                 <field name="partner_vat" string="RUT"/>
@@ -44,6 +49,7 @@
                         <field name="tipo_dte"/>
                         <field name="folio"/>
                         <field name="invoice_date"/>
+                        <field name="accounting_date"/>
                     </group>
 
                     <group string="Entidad">
