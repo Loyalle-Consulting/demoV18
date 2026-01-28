@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from odoo import models, fields, _
 from odoo.exceptions import UserError
 
@@ -40,6 +42,11 @@ class RcvLine(models.Model):
 
     invoice_date = fields.Date(
         string="Fecha Documento",
+    )
+
+    reception_date = fields.Date(
+        string="Fecha Recepción SII",
+        help="Fecha de recepción informada por el SII",
     )
 
     # =====================================================
@@ -86,12 +93,12 @@ class RcvLine(models.Model):
     )
 
     # =====================================================
-    # ACCIÓN: CREAR FACTURA (FLUJO MIXTO)
+    # ACCIÓN: CREAR FACTURA (DESDE UNA LÍNEA)
     # =====================================================
     def action_create_invoice(self):
         """
-        Crea factura automáticamente si es posible.
-        Si falta información crítica, abre wizard asistido.
+        Crea factura automáticamente desde una línea RCV.
+        Si falta información crítica, deriva al wizard asistido.
         """
         self.ensure_one()
 
@@ -107,11 +114,11 @@ class RcvLine(models.Model):
                 limit=1
             )
 
-        # Si no hay partner, abrir wizard
+        # Si no existe partner → wizard
         if not partner:
             return self._open_create_invoice_wizard()
 
-        # Determinar tipo de factura
+        # Tipo de documento según libro
         if self.book_id.rcv_type == "sale":
             move_type = "out_invoice"
             journal_type = "sale"
@@ -134,7 +141,7 @@ class RcvLine(models.Model):
                 % ("Ventas" if journal_type == "sale" else "Compras")
             )
 
-        # Crear factura (línea única, RCV no trae detalle)
+        # Crear factura (RCV no trae detalle)
         move = self.env["account.move"].create({
             "move_type": move_type,
             "partner_id": partner.id,
@@ -149,12 +156,12 @@ class RcvLine(models.Model):
             ],
         })
 
-        # Vincular y actualizar estado
+        # Vincular factura ↔ RCV
         self.account_move_id = move.id
         self.match_state = "created"
 
     # =====================================================
-    # WIZARD ASISTIDO (SOLO SI FALTA INFO)
+    # WIZARD ASISTIDO
     # =====================================================
     def _open_create_invoice_wizard(self):
         return {
@@ -164,6 +171,7 @@ class RcvLine(models.Model):
             "view_mode": "form",
             "target": "new",
             "context": {
-                "default_rcv_line_id": self.id,
+                "active_ids": [self.id],
+                "active_model": "rcv.line",
             },
         }
