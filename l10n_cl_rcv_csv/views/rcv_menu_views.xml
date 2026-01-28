@@ -2,40 +2,29 @@
 <odoo>
 
     <!-- ===================================================== -->
-    <!-- MENÚ RAÍZ -->
+    <!-- ACCIONES BASE (YA EXISTENTES, SE CONSERVAN) -->
     <!-- ===================================================== -->
-    <menuitem
-        id="menu_rcv_root"
-        name="RCV SII"
-        sequence="10"
-    />
+
+    <!-- Acción Libros RCV (por período) -->
+    <record id="action_rcv_book" model="ir.actions.act_window">
+        <field name="name">Libros RCV</field>
+        <field name="res_model">rcv.book</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Acción Importar CSV -->
+    <record id="action_rcv_import_wizard" model="ir.actions.act_window">
+        <field name="name">Importar RCV (CSV)</field>
+        <field name="res_model">rcv.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
 
     <!-- ===================================================== -->
-    <!-- SUBMENÚ: LIBROS RCV (POR PERIODO) -->
+    <!-- NUEVAS ACCIONES CONSOLIDADAS (rcv.line) -->
     <!-- ===================================================== -->
-    <menuitem
-        id="menu_rcv_books"
-        name="Libros RCV"
-        parent="menu_rcv_root"
-        sequence="10"
-        action="action_rcv_book"
-    />
 
-    <!-- ===================================================== -->
-    <!-- SUBMENÚ: IMPORTAR CSV -->
-    <!-- ===================================================== -->
-    <menuitem
-        id="menu_rcv_import"
-        name="Importar RCV (CSV)"
-        parent="menu_rcv_root"
-        sequence="20"
-        action="action_rcv_import_wizard"
-    />
-
-    <!-- ===================================================== -->
-    <!-- ACCIÓN: LIBRO VENTAS (CONSOLIDADO) -->
-    <!-- MODELO REAL: rcv.line  ✅ -->
-    <!-- ===================================================== -->
+    <!-- Libro Ventas Consolidado -->
     <record id="action_rcv_lines_sale" model="ir.actions.act_window">
         <field name="name">Libro Ventas (Consolidado)</field>
         <field name="res_model">rcv.line</field>
@@ -44,18 +33,7 @@
         <field name="context">{}</field>
     </record>
 
-    <menuitem
-        id="menu_rcv_lines_sale"
-        name="Libro Ventas (Consolidado)"
-        parent="menu_rcv_root"
-        sequence="30"
-        action="action_rcv_lines_sale"
-    />
-
-    <!-- ===================================================== -->
-    <!-- ACCIÓN: LIBRO COMPRAS (CONSOLIDADO) -->
-    <!-- MODELO REAL: rcv.line  ✅ -->
-    <!-- ===================================================== -->
+    <!-- Libro Compras Consolidado -->
     <record id="action_rcv_lines_purchase" model="ir.actions.act_window">
         <field name="name">Libro Compras (Consolidado)</field>
         <field name="res_model">rcv.line</field>
@@ -64,12 +42,51 @@
         <field name="context">{}</field>
     </record>
 
+    <!-- ===================================================== -->
+    <!-- MENÚS -->
+    <!-- ===================================================== -->
+
+    <!-- Menú raíz -->
+    <menuitem
+        id="menu_rcv_root"
+        name="RCV SII"
+        sequence="60"
+    />
+
+    <!-- Libros RCV -->
+    <menuitem
+        id="menu_rcv_books"
+        name="Libros RCV"
+        parent="menu_rcv_root"
+        action="action_rcv_book"
+        sequence="10"
+    />
+
+    <!-- Importar CSV -->
+    <menuitem
+        id="menu_rcv_import"
+        name="Importar RCV (CSV)"
+        parent="menu_rcv_root"
+        action="action_rcv_import_wizard"
+        sequence="20"
+    />
+
+    <!-- Ventas Consolidado -->
+    <menuitem
+        id="menu_rcv_lines_sale"
+        name="Libro Ventas (Consolidado)"
+        parent="menu_rcv_root"
+        action="action_rcv_lines_sale"
+        sequence="30"
+    />
+
+    <!-- Compras Consolidado -->
     <menuitem
         id="menu_rcv_lines_purchase"
         name="Libro Compras (Consolidado)"
         parent="menu_rcv_root"
-        sequence="40"
         action="action_rcv_lines_purchase"
+        sequence="40"
     />
 
 </odoo>
