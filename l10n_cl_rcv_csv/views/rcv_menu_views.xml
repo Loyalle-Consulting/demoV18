@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
 
-    <!-- ===================================================== -->
-    <!-- ACCIONES BASE (YA EXISTENTES, SE CONSERVAN) -->
-    <!-- ===================================================== -->
+    <!-- ========================= -->
+    <!-- ACCIONES BASE -->
+    <!-- ========================= -->
 
-    <!-- Acción Libros RCV (por período) -->
     <record id="action_rcv_book" model="ir.actions.act_window">
         <field name="name">Libros RCV</field>
         <field name="res_model">rcv.book</field>
         <field name="view_mode">list,form</field>
     </record>
 
-    <!-- Acción Importar CSV -->
     <record id="action_rcv_import_wizard" model="ir.actions.act_window">
         <field name="name">Importar RCV (CSV)</field>
         <field name="res_model">rcv.import.wizard</field>
@@ -20,40 +18,30 @@
         <field name="target">new</field>
     </record>
 
-    <!-- ===================================================== -->
-    <!-- NUEVAS ACCIONES CONSOLIDADAS (rcv.line) -->
-    <!-- ===================================================== -->
+    <!-- ========================= -->
+    <!-- CONSOLIDADOS (SEGUROS) -->
+    <!-- ========================= -->
 
-    <!-- Libro Ventas Consolidado -->
-    <record id="action_rcv_lines_sale" model="ir.actions.act_window">
+    <record id="action_rcv_line_sale" model="ir.actions.act_window">
         <field name="name">Libro Ventas (Consolidado)</field>
         <field name="res_model">rcv.line</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="domain">[('book_id.rcv_type','=','sale')]</field>
-        <field name="context">{}</field>
     </record>
 
-    <!-- Libro Compras Consolidado -->
-    <record id="action_rcv_lines_purchase" model="ir.actions.act_window">
+    <record id="action_rcv_line_purchase" model="ir.actions.act_window">
         <field name="name">Libro Compras (Consolidado)</field>
         <field name="res_model">rcv.line</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="domain">[('book_id.rcv_type','=','purchase')]</field>
-        <field name="context">{}</field>
     </record>
 
-    <!-- ===================================================== -->
+    <!-- ========================= -->
     <!-- MENÚS -->
-    <!-- ===================================================== -->
+    <!-- ========================= -->
 
-    <!-- Menú raíz -->
-    <menuitem
-        id="menu_rcv_root"
-        name="RCV SII"
-        sequence="60"
-    />
+    <menuitem id="menu_rcv_root" name="RCV SII" sequence="60"/>
 
-    <!-- Libros RCV -->
     <menuitem
         id="menu_rcv_books"
         name="Libros RCV"
@@ -62,7 +50,6 @@
         sequence="10"
     />
 
-    <!-- Importar CSV -->
     <menuitem
         id="menu_rcv_import"
         name="Importar RCV (CSV)"
@@ -71,21 +58,19 @@
         sequence="20"
     />
 
-    <!-- Ventas Consolidado -->
     <menuitem
-        id="menu_rcv_lines_sale"
+        id="menu_rcv_sale"
         name="Libro Ventas (Consolidado)"
         parent="menu_rcv_root"
-        action="action_rcv_lines_sale"
+        action="action_rcv_line_sale"
         sequence="30"
     />
 
-    <!-- Compras Consolidado -->
     <menuitem
-        id="menu_rcv_lines_purchase"
+        id="menu_rcv_purchase"
         name="Libro Compras (Consolidado)"
         parent="menu_rcv_root"
-        action="action_rcv_lines_purchase"
+        action="action_rcv_line_purchase"
         sequence="40"
     />
 
