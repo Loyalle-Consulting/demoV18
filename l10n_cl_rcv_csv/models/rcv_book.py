@@ -1,4 +1,5 @@
-from odoo import models, fields
+from odoo import models, fields, _
+from odoo.exceptions import UserError
 
 
 class RcvBook(models.Model):
@@ -48,3 +49,23 @@ class RcvBook(models.Model):
         "book_id",
         string="Líneas RCV",
     )
+
+    # =========================================================
+    # ACCIÓN: Conciliar con Contabilidad
+    # =========================================================
+    def action_reconcile_with_accounting(self):
+        """
+        Placeholder inicial.
+        En el siguiente paso aquí se implementará:
+        - búsqueda de account.move
+        - comparación por RUT / folio / monto
+        - actualización de match_state
+        """
+        for book in self:
+            if not book.line_ids:
+                raise UserError(_("Este libro no tiene líneas para conciliar."))
+
+            # Por ahora solo marcamos estado como "compared"
+            book.state = "compared"
+
+        return True
