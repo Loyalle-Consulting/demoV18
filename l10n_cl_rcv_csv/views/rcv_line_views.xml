@@ -7,17 +7,11 @@
         <field name="name">rcv.line.tree</field>
         <field name="model">rcv.line</field>
         <field name="arch" type="xml">
-            <list
-                multi="True"
-                decoration-success="match_state == 'matched'"
-                decoration-warning="match_state == 'amount_diff'"
-                decoration-info="match_state == 'created'"
-                decoration-danger="match_state == 'not_found'"
-            >
+            <list>
 
                 <!-- Documento -->
-                <field name="tipo_dte" string="DTE" width="60"/>
-                <field name="folio" width="100"/>
+                <field name="tipo_dte" string="DTE"/>
+                <field name="folio"/>
                 <field name="invoice_date"/>
 
                 <!-- Cliente / Proveedor -->
