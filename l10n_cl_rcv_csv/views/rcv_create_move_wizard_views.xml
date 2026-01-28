@@ -1,25 +1,17 @@
 <odoo>
-
-    <!-- ========================================= -->
-    <!-- Vista del wizard: Crear facturas desde RCV -->
-    <!-- ========================================= -->
     <record id="view_rcv_create_move_wizard_form" model="ir.ui.view">
         <field name="name">rcv.create.move.wizard.form</field>
         <field name="model">rcv.create.move.wizard</field>
         <field name="arch" type="xml">
-            <form string="Crear facturas desde RCV">
+            <form string="Crear Facturas desde RCV">
                 <sheet>
-
                     <group>
                         <field name="company_id" readonly="1"/>
                     </group>
 
                     <group string="Líneas seleccionadas">
-                        <field name="line_ids"
-                               widget="many2many_tags"
-                               readonly="1"/>
+                        <field name="line_ids" widget="many2many_tags" readonly="1"/>
                     </group>
-
                 </sheet>
 
                 <footer>
@@ -27,15 +19,15 @@
                         name="action_create_moves"
                         type="object"
                         string="Crear facturas"
-                        class="btn-primary"/>
-
+                        class="btn-primary"
+                    />
                     <button
                         string="Cancelar"
                         special="cancel"
-                        class="btn-secondary"/>
+                        class="btn-secondary"
+                    />
                 </footer>
             </form>
         </field>
     </record>
-
 </odoo>
