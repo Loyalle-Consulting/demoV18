@@ -10,7 +10,7 @@
         <field name="binding_view_types">list</field>
         <field name="state">code</field>
         <field name="code">
-return {
+action = {
     "type": "ir.actions.act_window",
     "name": "Crear Facturas desde RCV",
     "res_model": "rcv.create.move.wizard",
