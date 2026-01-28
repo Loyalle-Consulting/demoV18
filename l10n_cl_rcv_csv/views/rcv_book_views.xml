@@ -1,22 +1,8 @@
 <odoo>
 
-    <!-- ===================================================== -->
-    <!-- Acción: Libros RCV                                   -->
-    <!-- ===================================================== -->
-    <record id="action_rcv_book" model="ir.actions.act_window">
-        <field name="name">Libros RCV</field>
-        <field name="res_model">rcv.book</field>
-        <field name="view_mode">list,form</field>
-        <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">
-                Importa y gestiona los Libros RCV (Compras y Ventas) desde CSV del SII.
-            </p>
-        </field>
-    </record>
-
-    <!-- ===================================================== -->
-    <!-- Vista LISTA Libros RCV                               -->
-    <!-- ===================================================== -->
+    <!-- ========================= -->
+    <!-- Vista LISTA -->
+    <!-- ========================= -->
     <record id="view_rcv_book_tree" model="ir.ui.view">
         <field name="name">rcv.book.tree</field>
         <field name="model">rcv.book</field>
@@ -31,35 +17,35 @@
         </field>
     </record>
 
-    <!-- ===================================================== -->
-    <!-- Vista FORMULARIO Libro RCV                           -->
-    <!-- ===================================================== -->
+    <!-- ========================= -->
+    <!-- Vista FORMULARIO -->
+    <!-- ========================= -->
     <record id="view_rcv_book_form" model="ir.ui.view">
         <field name="name">rcv.book.form</field>
         <field name="model">rcv.book</field>
         <field name="arch" type="xml">
             <form string="Libro RCV">
                 <header>
+                    <!-- Botón SIN attrs (Odoo 18) -->
                     <button
                         name="action_reconcile_with_accounting"
                         type="object"
                         string="Conciliar con Contabilidad"
-                        class="btn-primary"
-                        attrs="{'invisible': [('state', '=', 'posted')]}"
-                    />
-                    <field
-                        name="state"
-                        widget="statusbar"
-                        statusbar_visible="imported,compared,posted"
-                    />
+                        class="btn-primary"/>
+
+                    <!-- Statusbar permitido -->
+                    <field name="state"
+                           widget="statusbar"
+                           statusbar_visible="imported,compared,posted"/>
                 </header>
 
                 <sheet>
-                    <group col="4">
-                        <field name="company_id" readonly="1"/>
-                        <field name="year" readonly="1"/>
-                        <field name="month" readonly="1"/>
-                        <field name="rcv_type" readonly="1"/>
+                    <group>
+                        <field name="company_id"/>
+                        <field name="year"/>
+                        <field name="month"/>
+                        <field name="rcv_type"/>
+                        <field name="state" readonly="1"/>
                     </group>
 
                     <notebook>
