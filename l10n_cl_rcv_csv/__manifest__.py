@@ -1,8 +1,8 @@
 {
     "name": "RCV CSV Chile",
-    "version": "18.0.1.0.0",
+    "version": "18.0.1.0.1",
     "category": "Accounting/Chile",
-    "summary": "Importación, conciliación y creación de facturas desde Libros RCV (CSV) del SII Chile",
+    "summary": "Importación, conciliación y análisis de Libros RCV (CSV) del SII Chile",
     "author": "Loyalle Consulting",
     "license": "LGPL-3",
 
@@ -18,13 +18,18 @@
         "security/ir.model.access.csv",
 
         # --------------------------------------------------
-        # VISTAS PRINCIPALES (modelos)
+        # VISTAS BASE
         # --------------------------------------------------
         "views/rcv_book_views.xml",
         "views/rcv_line_views.xml",
 
         # --------------------------------------------------
-        # ACCIONES SERVER (OBLIGATORIO antes de menús)
+        # VISTAS CONSOLIDADAS (NUEVO)
+        # --------------------------------------------------
+        "views/rcv_line_consolidated_views.xml",
+
+        # --------------------------------------------------
+        # ACCIONES SERVER
         # --------------------------------------------------
         "data/rcv_line_actions.xml",
 
