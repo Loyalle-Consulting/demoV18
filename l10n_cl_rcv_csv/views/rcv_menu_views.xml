@@ -1,18 +1,28 @@
 <odoo>
 
-    <!-- ===================================================== -->
-    <!-- Menú raíz RCV (bajo Contabilidad)                     -->
-    <!-- ===================================================== -->
+    <!-- Acción Libros RCV -->
+    <record id="action_rcv_book" model="ir.actions.act_window">
+        <field name="name">Libros RCV</field>
+        <field name="res_model">rcv.book</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Acción Importar CSV -->
+    <record id="action_rcv_import_wizard" model="ir.actions.act_window">
+        <field name="name">Importar RCV (CSV)</field>
+        <field name="res_model">rcv.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Menú raíz -->
     <menuitem
         id="menu_rcv_root"
-        name="RCV Chile"
-        parent="account.menu_finance"
+        name="RCV SII"
         sequence="60"
     />
 
-    <!-- ===================================================== -->
-    <!-- Libros RCV                                            -->
-    <!-- ===================================================== -->
+    <!-- Menú Libros -->
     <menuitem
         id="menu_rcv_books"
         name="Libros RCV"
@@ -21,12 +31,10 @@
         sequence="10"
     />
 
-    <!-- ===================================================== -->
-    <!-- Importar CSV RCV                                      -->
-    <!-- ===================================================== -->
+    <!-- Menú Importar -->
     <menuitem
         id="menu_rcv_import"
-        name="Importar RCV (CSV SII)"
+        name="Importar RCV (CSV)"
         parent="menu_rcv_root"
         action="action_rcv_import_wizard"
         sequence="20"
