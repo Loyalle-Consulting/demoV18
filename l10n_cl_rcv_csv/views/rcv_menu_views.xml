@@ -1,43 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <odoo>
 
-    <!-- Acción Libros RCV -->
-    <record id="action_rcv_book" model="ir.actions.act_window">
-        <field name="name">Libros RCV</field>
-        <field name="res_model">rcv.book</field>
-        <field name="view_mode">list,form</field>
-    </record>
-
-    <!-- Acción Importar CSV -->
-    <record id="action_rcv_import_wizard" model="ir.actions.act_window">
-        <field name="name">Importar RCV (CSV)</field>
-        <field name="res_model">rcv.import.wizard</field>
-        <field name="view_mode">form</field>
-        <field name="target">new</field>
-    </record>
-
-    <!-- Menú raíz -->
+    <!-- ===================================================== -->
+    <!-- MENÚ RAÍZ -->
+    <!-- ===================================================== -->
     <menuitem
         id="menu_rcv_root"
         name="RCV SII"
-        sequence="60"
+        sequence="10"
     />
 
-    <!-- Menú Libros -->
+    <!-- ===================================================== -->
+    <!-- SUBMENÚ: LIBROS RCV (POR PERIODO) -->
+    <!-- ===================================================== -->
     <menuitem
         id="menu_rcv_books"
         name="Libros RCV"
         parent="menu_rcv_root"
-        action="action_rcv_book"
         sequence="10"
+        action="action_rcv_book"
     />
 
-    <!-- Menú Importar -->
+    <!-- ===================================================== -->
+    <!-- SUBMENÚ: IMPORTAR CSV -->
+    <!-- ===================================================== -->
     <menuitem
         id="menu_rcv_import"
         name="Importar RCV (CSV)"
         parent="menu_rcv_root"
-        action="action_rcv_import_wizard"
         sequence="20"
+        action="action_rcv_import_wizard"
+    />
+
+    <!-- ===================================================== -->
+    <!-- ACCIÓN: LIBRO VENTAS (CONSOLIDADO) -->
+    <!-- MODELO REAL: rcv.line  ✅ -->
+    <!-- ===================================================== -->
+    <record id="action_rcv_lines_sale" model="ir.actions.act_window">
+        <field name="name">Libro Ventas (Consolidado)</field>
+        <field name="res_model">rcv.line</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('book_id.rcv_type','=','sale')]</field>
+        <field name="context">{}</field>
+    </record>
+
+    <menuitem
+        id="menu_rcv_lines_sale"
+        name="Libro Ventas (Consolidado)"
+        parent="menu_rcv_root"
+        sequence="30"
+        action="action_rcv_lines_sale"
+    />
+
+    <!-- ===================================================== -->
+    <!-- ACCIÓN: LIBRO COMPRAS (CONSOLIDADO) -->
+    <!-- MODELO REAL: rcv.line  ✅ -->
+    <!-- ===================================================== -->
+    <record id="action_rcv_lines_purchase" model="ir.actions.act_window">
+        <field name="name">Libro Compras (Consolidado)</field>
+        <field name="res_model">rcv.line</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('book_id.rcv_type','=','purchase')]</field>
+        <field name="context">{}</field>
+    </record>
+
+    <menuitem
+        id="menu_rcv_lines_purchase"
+        name="Libro Compras (Consolidado)"
+        parent="menu_rcv_root"
+        sequence="40"
+        action="action_rcv_lines_purchase"
     />
 
 </odoo>
