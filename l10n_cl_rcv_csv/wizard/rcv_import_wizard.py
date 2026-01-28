@@ -38,7 +38,7 @@ class RcvImportWizard(models.TransientModel):
     filename = fields.Char()
 
     # ---------------------------------------------------------
-    # UTILIDADES ROBUSTAS PARA CSV SII
+    # UTILIDADES ROBUSTAS CSV SII
     # ---------------------------------------------------------
     def _clean_header(self, value):
         if not value:
@@ -65,12 +65,15 @@ class RcvImportWizard(models.TransientModel):
     def _to_float(self, value):
         if not value:
             return 0.0
-        return float(
-            value.replace(".", "")
-            .replace(",", ".")
-            .replace("$", "")
-            .strip()
-        )
+        try:
+            return float(
+                value.replace(".", "")
+                .replace(",", ".")
+                .replace("$", "")
+                .strip()
+            )
+        except Exception:
+            return 0.0
 
     def _to_date(self, value):
         if not value:
@@ -119,13 +122,12 @@ class RcvImportWizard(models.TransientModel):
         Line = self.env["rcv.line"]
 
         # -----------------------------------------------------
-        # Procesar líneas (ANTI CSV SII)
+        # Procesar líneas
         # -----------------------------------------------------
         for raw_row in reader:
             row = {}
 
             for key, value in raw_row.items():
-                # 🔴 CLAVE: ignorar columnas inválidas del SII
                 if not key:
                     continue
 
@@ -135,16 +137,18 @@ class RcvImportWizard(models.TransientModel):
 
                 row[clean_key] = self._clean_value(value)
 
-            # -------------------------------------------------
-            # Crear línea RCV
-            # -------------------------------------------------
             Line.create({
                 "book_id": book.id,
 
+                # -----------------------------
+                # Documento
+                # -----------------------------
                 "tipo_dte": (
                     row.get("tipo_doc")
                     or row.get("tipo_documento")
+                    or row.get("tipo_dte")
                 ),
+
                 "folio": row.get("folio"),
 
                 "partner_vat": (
@@ -152,18 +156,32 @@ class RcvImportWizard(models.TransientModel):
                     or row.get("rut_proveedor")
                     or row.get("rut_cliente")
                 ),
+
                 "partner_name": (
                     row.get("razon_social")
                     or row.get("razon_social_emisor")
                 ),
 
+                # -----------------------------
+                # Fechas
+                # -----------------------------
                 "invoice_date": self._to_date(
-                    row.get("fecha_emision")
+                    row.get("fecha_docto")
                     or row.get("fecha_documento")
+                    or row.get("fecha_emision")
                 ),
 
+                "reception_date": self._to_date(
+                    row.get("fecha_recepcion")
+                ),
+
+                # -----------------------------
+                # Montos
+                # -----------------------------
                 "net_amount": self._to_float(row.get("monto_neto")),
-                "tax_amount": self._to_float(row.get("iva")),
+                "tax_amount": self._to_float(
+                    row.get("monto_iva") or row.get("iva")
+                ),
                 "total_amount": self._to_float(row.get("monto_total")),
 
                 "match_state": "not_found",
