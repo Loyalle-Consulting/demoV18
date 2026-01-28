@@ -23,7 +23,7 @@ class RcvLine(models.Model):
     # DATOS DOCUMENTO SII
     # =====================================================
     tipo_dte = fields.Char(
-        string="Tipo DTE",
+        string="DTE",
         help="Código DTE según SII (33, 34, 61, etc.)",
     )
 
@@ -42,6 +42,7 @@ class RcvLine(models.Model):
 
     invoice_date = fields.Date(
         string="Fecha Documento",
+        help="Fecha del documento informada en el RCV",
     )
 
     reception_date = fields.Date(
@@ -93,32 +94,35 @@ class RcvLine(models.Model):
     )
 
     # =====================================================
-    # ACCIÓN: CREAR FACTURA (DESDE UNA LÍNEA)
+    # ACCIÓN: CREAR FACTURA (UNA LÍNEA)
     # =====================================================
     def action_create_invoice(self):
         """
-        Crea factura automáticamente desde una línea RCV.
-        Si falta información crítica, deriva al wizard asistido.
+        Crea una factura desde una línea RCV.
+        Si falta información crítica (partner), abre el wizard asistido.
         """
         self.ensure_one()
 
-        # Ya existe factura
+        # Ya conciliado
         if self.account_move_id:
             return
 
-        # Buscar partner por RUT
+        # -------------------------------------------------
+        # Partner
+        # -------------------------------------------------
         partner = False
         if self.partner_vat:
             partner = self.env["res.partner"].search(
                 [("vat", "=", self.partner_vat)],
-                limit=1
+                limit=1,
             )
 
-        # Si no existe partner → wizard
         if not partner:
             return self._open_create_invoice_wizard()
 
-        # Tipo de documento según libro
+        # -------------------------------------------------
+        # Tipo de factura según libro
+        # -------------------------------------------------
         if self.book_id.rcv_type == "sale":
             move_type = "out_invoice"
             journal_type = "sale"
@@ -126,7 +130,6 @@ class RcvLine(models.Model):
             move_type = "in_invoice"
             journal_type = "purchase"
 
-        # Buscar diario contable
         journal = self.env["account.journal"].search(
             [
                 ("type", "=", journal_type),
@@ -141,12 +144,16 @@ class RcvLine(models.Model):
                 % ("Ventas" if journal_type == "sale" else "Compras")
             )
 
-        # Crear factura (RCV no trae detalle)
+        # -------------------------------------------------
+        # Crear factura (línea única, RCV no trae detalle)
+        # -------------------------------------------------
         move = self.env["account.move"].create({
             "move_type": move_type,
+            "company_id": self.book_id.company_id.id,
             "partner_id": partner.id,
             "invoice_date": self.invoice_date,
             "journal_id": journal.id,
+            "ref": f"RCV DTE {self.tipo_dte} Folio {self.folio}",
             "invoice_line_ids": [
                 (0, 0, {
                     "name": f"DTE {self.tipo_dte or ''} Folio {self.folio}",
@@ -156,22 +163,25 @@ class RcvLine(models.Model):
             ],
         })
 
-        # Vincular factura ↔ RCV
+        # Publicar
+        move.action_post()
+
+        # Vincular
         self.account_move_id = move.id
         self.match_state = "created"
 
     # =====================================================
-    # WIZARD ASISTIDO
+    # WIZARD ASISTIDO (MASIVO / FALTA INFO)
     # =====================================================
     def _open_create_invoice_wizard(self):
         return {
             "type": "ir.actions.act_window",
-            "name": _("Crear factura desde RCV"),
+            "name": _("Crear facturas desde RCV"),
             "res_model": "rcv.create.move.wizard",
             "view_mode": "form",
             "target": "new",
             "context": {
-                "active_ids": [self.id],
+                "active_ids": self.ids,
                 "active_model": "rcv.line",
             },
         }
