@@ -1,5 +1,6 @@
 {
     "name": "Restablecer_Estado_Borrador_Picking",
+    "license": "LGPL-3",
     "version": "1.0",
     "summary": "Permite restablecer movimientos de inventario al estado borrador",
     "author": "Loyalle Consulting",
