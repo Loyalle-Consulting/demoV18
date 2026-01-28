@@ -76,14 +76,28 @@ class RcvImportWizard(models.TransientModel):
         except Exception:
             return 0.0
 
+    # 🔴 FIX DEFINITIVO: formatos reales del SII
     def _to_date(self, value):
         if not value:
             return False
-        for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
+
+        value = value.strip()
+
+        formats = (
+            "%Y-%m-%d",
+            "%d-%m-%Y",
+            "%Y-%m-%d %H:%M:%S",
+            "%d-%m-%Y %H:%M:%S",
+            "%d/%m/%Y",
+            "%d/%m/%Y %H:%M:%S",
+        )
+
+        for fmt in formats:
             try:
                 return datetime.strptime(value, fmt).date()
             except Exception:
                 continue
+
         return False
 
     # ---------------------------------------------------------
@@ -95,9 +109,6 @@ class RcvImportWizard(models.TransientModel):
         if not self.csv_file:
             raise UserError(_("Debe seleccionar un archivo CSV del SII."))
 
-        # -----------------------------------------------------
-        # Crear libro RCV
-        # -----------------------------------------------------
         book = self.env["rcv.book"].create({
             "company_id": self.company_id.id,
             "year": self.year,
@@ -106,25 +117,16 @@ class RcvImportWizard(models.TransientModel):
             "state": "imported",
         })
 
-        # -----------------------------------------------------
-        # Leer CSV
-        # -----------------------------------------------------
         decoded = base64.b64decode(self.csv_file)
         content = decoded.decode("latin-1", errors="ignore")
 
-        reader = csv.DictReader(
-            StringIO(content),
-            delimiter=";"
-        )
+        reader = csv.DictReader(StringIO(content), delimiter=";")
 
         if not reader.fieldnames:
             raise UserError(_("El archivo CSV no contiene encabezados válidos."))
 
         Line = self.env["rcv.line"]
 
-        # -----------------------------------------------------
-        # Procesar líneas (BASE FUNCIONAL + FECHAS)
-        # -----------------------------------------------------
         for raw_row in reader:
             row = {}
 
@@ -136,9 +138,7 @@ class RcvImportWizard(models.TransientModel):
             Line.create({
                 "book_id": book.id,
 
-                # -----------------------------
-                # Documento (NO TOCAR)
-                # -----------------------------
+                # Documento
                 "tipo_dte": (
                     row.get("tipodoc")
                     or row.get("tipo_doc")
@@ -161,15 +161,11 @@ class RcvImportWizard(models.TransientModel):
                     or row.get("razon_social_emisor")
                 ),
 
-                # -----------------------------
-                # FECHAS (CLAVES REALES DEL CSV SII)
-                # -----------------------------
+                # 🔑 FECHAS (YA FUNCIONAN)
                 "invoice_date": self._to_date(row.get("fecha_docto")),
                 "accounting_date": self._to_date(row.get("fecha_recepcion")),
 
-                # -----------------------------
-                # Montos (NO TOCAR)
-                # -----------------------------
+                # Montos
                 "net_amount": self._to_float(
                     row.get("mntneto") or row.get("monto_neto")
                 ),
@@ -183,9 +179,6 @@ class RcvImportWizard(models.TransientModel):
                 "match_state": "not_found",
             })
 
-        # -----------------------------------------------------
-        # Abrir libro creado
-        # -----------------------------------------------------
         return {
             "type": "ir.actions.act_window",
             "name": _("Libro RCV"),
