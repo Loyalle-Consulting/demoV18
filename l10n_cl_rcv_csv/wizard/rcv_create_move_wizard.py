@@ -20,19 +20,6 @@ class RcvCreateMoveWizard(models.TransientModel):
         readonly=True,
     )
 
-    journal_id = fields.Many2one(
-        "account.journal",
-        string="Diario contable",
-        required=True,
-        domain="[('company_id', '=', company_id)]",
-    )
-
-    invoice_date = fields.Date(
-        string="Fecha de factura",
-        required=True,
-        default=fields.Date.context_today,
-    )
-
     line_ids = fields.Many2many(
         "rcv.line",
         string="Líneas RCV",
@@ -46,7 +33,7 @@ class RcvCreateMoveWizard(models.TransientModel):
     def default_get(self, fields_list):
         res = super().default_get(fields_list)
 
-        active_ids = self.env.context.get("active_ids")
+        active_ids = self.env.context.get("active_ids", [])
         if active_ids:
             res["line_ids"] = [(6, 0, active_ids)]
 
@@ -66,42 +53,19 @@ class RcvCreateMoveWizard(models.TransientModel):
 
         for line in self.line_ids:
 
+            # Evitar duplicados
             if line.account_move_id:
                 continue
 
-            partner = self._get_or_create_partner(line)
-            move_type = self._get_move_type_from_dte(line)
+            try:
+                line.action_create_invoice()
+            except Exception as e:
+                # Marcar línea con error sin romper proceso completo
+                line.match_state = "amount_diff"
+                continue
 
-            # Validar diario compatible
-            if move_type.startswith("out_") and self.journal_id.type != "sale":
-                raise UserError(_("Debe seleccionar un diario de VENTAS."))
-            if move_type.startswith("in_") and self.journal_id.type != "purchase":
-                raise UserError(_("Debe seleccionar un diario de COMPRAS."))
-
-            move_vals = {
-                "move_type": move_type,
-                "company_id": self.company_id.id,
-                "partner_id": partner.id,
-                "journal_id": self.journal_id.id,
-                "invoice_date": self.invoice_date,
-                "invoice_date_due": self.invoice_date,
-                "ref": f"RCV DTE {line.tipo_dte} Folio {line.folio}",
-                "invoice_line_ids": [
-                    (0, 0, {
-                        "name": f"DTE {line.tipo_dte} Folio {line.folio}",
-                        "quantity": 1,
-                        "price_unit": line.total_amount or 0.0,
-                    })
-                ],
-            }
-
-            move = self.env["account.move"].create(move_vals)
-            move.action_post()
-
-            line.account_move_id = move.id
-            line.match_state = "created"
-
-            created_moves |= move
+            if line.account_move_id:
+                created_moves |= line.account_move_id
 
         if not created_moves:
             raise UserError(_("No se creó ninguna factura nueva."))
@@ -112,34 +76,5 @@ class RcvCreateMoveWizard(models.TransientModel):
             "res_model": "account.move",
             "view_mode": "tree,form",
             "domain": [("id", "in", created_moves.ids)],
+            "context": {"create": False},
         }
-
-    # ---------------------------------------------------------
-    # HELPERS
-    # ---------------------------------------------------------
-
-    def _get_move_type_from_dte(self, line):
-        """
-        Determina el tipo de factura desde el DTE real SII
-        """
-        if line.book_id.rcv_type == "purchase":
-            return "in_refund" if line.tipo_dte == "61" else "in_invoice"
-        else:
-            return "out_refund" if line.tipo_dte == "61" else "out_invoice"
-
-    def _get_or_create_partner(self, line):
-        Partner = self.env["res.partner"]
-
-        partner = Partner.search(
-            [("vat", "=", line.partner_vat)],
-            limit=1,
-        )
-
-        if partner:
-            return partner
-
-        return Partner.create({
-            "name": line.partner_name or _("Tercero RCV"),
-            "vat": line.partner_vat,
-            "company_type": "company",
-        })
