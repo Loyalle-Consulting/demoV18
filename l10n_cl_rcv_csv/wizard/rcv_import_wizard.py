@@ -41,7 +41,6 @@ class RcvImportWizard(models.TransientModel):
     # UTILIDADES
     # ---------------------------------------------------------
     def _clean_header(self, value):
-        """Normaliza encabezados del CSV del SII"""
         return (
             value.strip()
             .lower()
@@ -53,21 +52,30 @@ class RcvImportWizard(models.TransientModel):
             .replace("ú", "u")
         )
 
+    def _clean_value(self, value):
+        """🔥 CLAVE: normaliza strings/list/None desde CSV SII"""
+        if value is None:
+            return ""
+        if isinstance(value, list):
+            return " ".join([v for v in value if v]).strip()
+        return str(value).strip()
+
     def _to_float(self, value):
-        """Convierte montos tipo SII a float"""
         if not value:
             return 0.0
         return float(
-            value.replace(".", "").replace(",", ".").replace("$", "").strip()
+            value.replace(".", "")
+            .replace(",", ".")
+            .replace("$", "")
+            .strip()
         )
 
     def _to_date(self, value):
-        """Convierte fechas del SII"""
         if not value:
             return False
         for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
             try:
-                return datetime.strptime(value.strip(), fmt).date()
+                return datetime.strptime(value, fmt).date()
             except Exception:
                 continue
         return False
@@ -106,11 +114,6 @@ class RcvImportWizard(models.TransientModel):
         if not reader.fieldnames:
             raise UserError(_("El archivo CSV no contiene encabezados válidos."))
 
-        # Normalizar headers
-        normalized_headers = {
-            self._clean_header(h): h for h in reader.fieldnames
-        }
-
         Line = self.env["rcv.line"]
 
         # -----------------------------------------------------
@@ -119,12 +122,14 @@ class RcvImportWizard(models.TransientModel):
         for raw_row in reader:
             row = {}
             for key, value in raw_row.items():
-                row[self._clean_header(key)] = (value or "").strip()
+                clean_key = self._clean_header(key)
+                clean_value = self._clean_value(value)
+                row[clean_key] = clean_value
 
             Line.create({
                 "book_id": book.id,
 
-                # Datos documento
+                # Documento
                 "tipo_dte": (
                     row.get("tipo_doc")
                     or row.get("tipo_documento")
@@ -142,24 +147,18 @@ class RcvImportWizard(models.TransientModel):
                     or row.get("razon_social_emisor")
                 ),
 
-                # Fechas
+                # Fecha
                 "invoice_date": self._to_date(
                     row.get("fecha_emision")
                     or row.get("fecha_documento")
                 ),
 
                 # Montos
-                "net_amount": self._to_float(
-                    row.get("monto_neto")
-                ),
-                "tax_amount": self._to_float(
-                    row.get("iva")
-                ),
-                "total_amount": self._to_float(
-                    row.get("monto_total")
-                ),
+                "net_amount": self._to_float(row.get("monto_neto")),
+                "tax_amount": self._to_float(row.get("iva")),
+                "total_amount": self._to_float(row.get("monto_total")),
 
-                # Estado conciliación
+                # Conciliación
                 "match_state": "not_found",
             })
 
