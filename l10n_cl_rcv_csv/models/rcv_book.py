@@ -57,7 +57,7 @@ class RcvBook(models.Model):
     )
 
     # =========================================================
-    # ACCIÓN PRINCIPAL – OPCIÓN A DEFINITIVA
+    # ACCIÓN PRINCIPAL – CREAR FACTURAS (OPCIÓN A DEFINITIVA)
     # =========================================================
     def action_create_invoices(self):
         """
@@ -66,7 +66,6 @@ class RcvBook(models.Model):
         """
         self.ensure_one()
 
-        # Líneas pendientes de facturar
         lines_to_invoice = self.line_ids.filtered(
             lambda l: not l.account_move_id
         )
@@ -84,7 +83,7 @@ class RcvBook(models.Model):
                 if move:
                     created_moves |= move
             except UserError:
-                # Error funcional explícito → se muestra al usuario
+                # Error funcional → mostrar tal cual
                 raise
             except Exception as e:
                 raise UserError(
@@ -100,9 +99,7 @@ class RcvBook(models.Model):
         # Actualizar estado del libro
         self.state = "posted"
 
-        # =====================================================
-        # RETORNO CORRECTO (ODOO 18)
-        # =====================================================
+        # Retorno correcto Odoo 18 (evita error de vistas)
         return {
             "type": "ir.actions.act_window",
             "name": _("Facturas creadas desde RCV"),
@@ -124,7 +121,34 @@ class RcvBook(models.Model):
         }
 
     # =========================================================
-    # ACCIÓN: Conciliar con Contabilidad (NO TOCAR)
+    # ACCIÓN: RESTABLECER A IMPORTADO (ROLLBACK CONTROLADO)
+    # =========================================================
+    def action_reset_to_imported(self):
+        """
+        Permite volver el libro a estado IMPORTADO cuando las
+        facturas fueron revertidas a borrador y eliminadas
+        manualmente en Contabilidad.
+        """
+        self.ensure_one()
+
+        for line in self.line_ids:
+            line.account_move_id = False
+            line.match_state = "not_found"
+
+        self.state = "imported"
+
+        # Retorno explícito (evita error Owl / act_window)
+        return {
+            "type": "ir.actions.act_window",
+            "res_model": "rcv.book",
+            "view_mode": "form",
+            "views": [(False, "form")],
+            "res_id": self.id,
+            "target": "current",
+        }
+
+    # =========================================================
+    # ACCIÓN: CONCILIAR CON CONTABILIDAD (NO TOCAR)
     # =========================================================
     def action_reconcile_with_accounting(self):
         for book in self:
