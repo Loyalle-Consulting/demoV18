@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- ========================= -->
+    <!-- ACCIONES BASE -->
+    <!-- ========================= -->
+
+    <record id="action_rcv_book" model="ir.actions.act_window">
+        <field name="name">Libros RCV</field>
+        <field name="res_model">rcv.book</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_rcv_import_wizard" model="ir.actions.act_window">
+        <field name="name">Importar RCV (CSV)</field>
+        <field name="res_model">rcv.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- ========================= -->
+    <!-- CONSOLIDADOS (SEGUROS) -->
+    <!-- ========================= -->
+
+    <record id="action_rcv_line_sale" model="ir.actions.act_window">
+        <field name="name">Libro Ventas (Consolidado)</field>
+        <field name="res_model">rcv.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('book_id.rcv_type','=','sale')]</field>
+    </record>
+
+    <record id="action_rcv_line_purchase" model="ir.actions.act_window">
+        <field name="name">Libro Compras (Consolidado)</field>
+        <field name="res_model">rcv.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('book_id.rcv_type','=','purchase')]</field>
+    </record>
+
+    <!-- ========================= -->
+    <!-- MENÚS -->
+    <!-- ========================= -->
+
+    <menuitem id="menu_rcv_root" name="RCV SII" sequence="60"/>
+
+    <menuitem
+        id="menu_rcv_books"
+        name="Libros RCV"
+        parent="menu_rcv_root"
+        action="action_rcv_book"
+        sequence="10"
+    />
+
+    <menuitem
+        id="menu_rcv_import"
+        name="Importar RCV (CSV)"
+        parent="menu_rcv_root"
+        action="action_rcv_import_wizard"
+        sequence="20"
+    />
+
+    <menuitem
+        id="menu_rcv_sale"
+        name="Libro Ventas (Consolidado)"
+        parent="menu_rcv_root"
+        action="action_rcv_line_sale"
+        sequence="30"
+    />
+
+    <menuitem
+        id="menu_rcv_purchase"
+        name="Libro Compras (Consolidado)"
+        parent="menu_rcv_root"
+        action="action_rcv_line_purchase"
+        sequence="40"
+    />
+
+</odoo>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- ================================================= -->
+    <!-- VISTA LISTA CONSOLIDADA RCV (REUTILIZABLE) -->
+    <!-- ================================================= -->
+    <record id="view_rcv_line_consolidated_tree" model="ir.ui.view">
+        <field name="name">rcv.line.consolidated.tree</field>
+        <field name="model">rcv.line</field>
+        <field name="arch" type="xml">
+            <list string="RCV Consolidado"
+                  default_order="invoice_date desc, folio desc">
+
+                <!-- Tipo Libro -->
+                <field name="book_id"
+                       string="Tipo Libro"
+                       widget="many2one"
+                       options="{'no_open': True}"/>
+
+                <!-- Documento -->
+                <field name="tipo_dte" string="DTE"/>
+                <field name="folio"/>
+
+                <!-- Fechas -->
+                <field name="invoice_date" string="Fecha Documento"/>
+                <field name="accounting_date" string="Fecha Contable"/>
+
+                <!-- Entidad -->
+                <field name="partner_vat" string="RUT"/>
+                <field name="partner_name" string="Razón Social"/>
+
+                <!-- Montos -->
+                <field name="net_amount" string="Neto" sum="Total Neto"/>
+                <field name="tax_amount" string="IVA" sum="Total IVA"/>
+                <field name="total_amount" string="Total" sum="Total General"/>
+
+                <!-- Estado -->
+                <field name="match_state" string="Estado"/>
+                <field name="account_move_id" string="Factura Odoo"/>
+
+            </list>
+        </field>
+    </record>
+
+    <!-- ================================================= -->
+    <!-- ACCIÓN: LIBRO VENTAS CONSOLIDADO -->
+    <!-- ================================================= -->
+    <record id="action_rcv_sales_consolidated" model="ir.actions.act_window">
+        <field name="name">Libro Ventas (Consolidado)</field>
+        <field name="res_model">rcv.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_rcv_line_consolidated_tree"/>
+        <field name="domain">[('book_id.rcv_type', '=', 'sale')]</field>
+        <field name="context">
+            {
+                'search_default_group_by_invoice_date': 1
+            }
+        </field>
+    </record>
+
+    <!-- ================================================= -->
+    <!-- ACCIÓN: LIBRO COMPRAS CONSOLIDADO -->
+    <!-- ================================================= -->
+    <record id="action_rcv_purchases_consolidated" model="ir.actions.act_window">
+        <field name="name">Libro Compras (Consolidado)</field>
+        <field name="res_model">rcv.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_rcv_line_consolidated_tree"/>
+        <field name="domain">[('book_id.rcv_type', '=', 'purchase')]</field>
+        <field name="context">
+            {
+                'search_default_group_by_invoice_date': 1
+            }
+        </field>
+    </record>
+
+    <!-- ================================================= -->
+    <!-- MENÚS -->
+    <!-- ================================================= -->
+
+    <menuitem id="menu_rcv_sales_consolidated"
+              name="Libro Ventas (Consolidado)"
+              parent="l10n_cl_rcv_csv.menu_rcv_root"
+              action="action_rcv_sales_consolidated"
+              sequence="30"/>
+
+    <menuitem id="menu_rcv_purchases_consolidated"
+              name="Libro Compras (Consolidado)"
+              parent="l10n_cl_rcv_csv.menu_rcv_root"
+              action="action_rcv_purchases_consolidated"
+              sequence="40"/>
+
+</odoo>

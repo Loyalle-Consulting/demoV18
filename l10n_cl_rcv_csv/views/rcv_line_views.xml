@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- ============================= -->
+    <!-- Vista lista -->
+    <!-- ============================= -->
+    <record id="view_rcv_line_tree" model="ir.ui.view">
+        <field name="name">rcv.line.tree</field>
+        <field name="model">rcv.line</field>
+        <field name="arch" type="xml">
+            <list multi_edit="1">
+
+                <!-- Documento -->
+                <field name="tipo_dte" string="DTE"/>
+                <field name="folio"/>
+
+                <!-- Fechas -->
+                <field name="invoice_date" string="Fecha Documento"/>
+                <field name="accounting_date" string="Fecha Contable"/>
+
+                <!-- Cliente / Proveedor -->
+                <field name="partner_vat" string="RUT"/>
+                <field name="partner_name" string="Razón Social"/>
+
+                <!-- Montos -->
+                <field name="net_amount" string="Neto"/>
+                <field name="tax_amount" string="IVA"/>
+                <field name="total_amount" string="Total"/>
+
+                <!-- Conciliación -->
+                <field name="match_state" string="Estado"/>
+                <field name="account_move_id" string="Factura Odoo"/>
+
+            </list>
+        </field>
+    </record>
+
+    <!-- ============================= -->
+    <!-- Vista formulario -->
+    <!-- ============================= -->
+    <record id="view_rcv_line_form" model="ir.ui.view">
+        <field name="name">rcv.line.form</field>
+        <field name="model">rcv.line</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+
+                    <group string="Documento">
+                        <field name="tipo_dte"/>
+                        <field name="folio"/>
+                        <field name="invoice_date"/>
+                        <field name="accounting_date"/>
+                    </group>
+
+                    <group string="Entidad">
+                        <field name="partner_vat"/>
+                        <field name="partner_name"/>
+                    </group>
+
+                    <group string="Montos">
+                        <field name="net_amount"/>
+                        <field name="tax_amount"/>
+                        <field name="total_amount"/>
+                    </group>
+
+                    <group string="Conciliación">
+                        <field name="match_state"/>
+                        <field name="account_move_id"/>
+                    </group>
+
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+</odoo>
