@@ -32,6 +32,7 @@ class RcvLine(models.Model):
     tipo_dte = fields.Char(
         string="DTE",
         help="Código DTE según SII (33, 34, 61, etc.)",
+        required=True,
     )
 
     folio = fields.Char(
@@ -86,7 +87,7 @@ class RcvLine(models.Model):
             ("not_found", "No existe en Odoo"),
             ("matched", "Cuadra"),
             ("amount_diff", "Diferencia de monto"),
-            ("created", "Factura creada"),
+            ("created", "Documento creado"),
         ],
         default="not_found",
         required=True,
@@ -94,7 +95,7 @@ class RcvLine(models.Model):
 
     account_move_id = fields.Many2one(
         "account.move",
-        string="Factura Odoo",
+        string="Documento Odoo",
         readonly=True,
     )
 
@@ -120,15 +121,28 @@ class RcvLine(models.Model):
                 _("No existe el contacto con RUT %s.") % self.partner_vat
             )
 
-        # Tipo de movimiento
-        move_type = (
-            "out_invoice"
-            if self.book_id.rcv_type == "sale"
-            else "in_invoice"
-        )
+        # -------------------------------------------------
+        # DETERMINAR TIPO DE MOVIMIENTO SEGÚN DTE
+        # -------------------------------------------------
+        if self.tipo_dte == "61":
+            # Nota de crédito
+            move_type = (
+                "out_refund"
+                if self.book_id.rcv_type == "sale"
+                else "in_refund"
+            )
+        else:
+            # Factura
+            move_type = (
+                "out_invoice"
+                if self.book_id.rcv_type == "sale"
+                else "in_invoice"
+            )
 
-        # Diario
-        journal_type = "sale" if move_type == "out_invoice" else "purchase"
+        # -------------------------------------------------
+        # DIARIO
+        # -------------------------------------------------
+        journal_type = "sale" if move_type in ("out_invoice", "out_refund") else "purchase"
         journal = self.env["account.journal"].search(
             [
                 ("type", "=", journal_type),
@@ -140,14 +154,24 @@ class RcvLine(models.Model):
         if not journal:
             raise UserError(_("No existe diario contable válido."))
 
-        # Tipo documento LATAM
+        # -------------------------------------------------
+        # TIPO DOCUMENTO LATAM
+        # -------------------------------------------------
         latam_doc_type = self._get_latam_document_type()
         if not latam_doc_type:
-            raise UserError(_("No se pudo determinar el tipo de DTE."))
+            raise UserError(
+                _("No se encontró el tipo de documento LATAM para DTE %s.")
+                % self.tipo_dte
+            )
 
-        # Impuestos
+        # -------------------------------------------------
+        # IMPUESTOS
+        # -------------------------------------------------
         tax_ids = self._get_tax_ids()
 
+        # -------------------------------------------------
+        # CREAR DOCUMENTO CONTABLE
+        # -------------------------------------------------
         move = self.env["account.move"].create({
             "move_type": move_type,
             "company_id": self.company_id.id,
@@ -192,6 +216,10 @@ class RcvLine(models.Model):
         if self.tipo_dte == "34":
             return self.env["account.tax"]
 
+        # DTE 61 normalmente NO lleva IVA
+        if self.tipo_dte == "61":
+            return self.env["account.tax"]
+
         # IVA 19% Ventas
         return self.env["account.tax"].search(
             [
@@ -203,7 +231,7 @@ class RcvLine(models.Model):
         )
 
     # =====================================================
-    # COMPATIBILIDAD (NO ROMPER)
+    # COMPATIBILIDAD
     # =====================================================
     def action_create_invoice(self):
         self.ensure_one()
