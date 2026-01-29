@@ -9,6 +9,10 @@ class RcvBook(models.Model):
     _description = "Libro RCV SII"
     _order = "year desc, month desc"
 
+    # =========================================================
+    # CAMPOS
+    # =========================================================
+
     company_id = fields.Many2one(
         "res.company",
         required=True,
@@ -53,15 +57,16 @@ class RcvBook(models.Model):
     )
 
     # =========================================================
-    # ACCIÓN: Crear facturas desde RCV (OPCIÓN A DEFINITIVA)
+    # ACCIÓN PRINCIPAL – OPCIÓN A DEFINITIVA
     # =========================================================
     def action_create_invoices(self):
         """
         Crea facturas en Contabilidad Odoo desde las líneas RCV
-        que aún no tengan factura asociada.
+        que aún no tengan una factura asociada.
         """
         self.ensure_one()
 
+        # Líneas pendientes de facturar
         lines_to_invoice = self.line_ids.filtered(
             lambda l: not l.account_move_id
         )
@@ -79,24 +84,43 @@ class RcvBook(models.Model):
                 if move:
                     created_moves |= move
             except UserError:
-                # Error funcional: se muestra tal cual
+                # Error funcional explícito → se muestra al usuario
                 raise
             except Exception as e:
                 raise UserError(
-                    _("Error al crear factura para folio %s:\n%s")
+                    _("Error al crear factura para el folio %s:\n%s")
                     % (line.folio, str(e))
                 )
+
+        if not created_moves:
+            raise UserError(
+                _("No se creó ninguna factura nueva.")
+            )
 
         # Actualizar estado del libro
         self.state = "posted"
 
+        # =====================================================
+        # RETORNO CORRECTO (ODOO 18)
+        # =====================================================
         return {
             "type": "ir.actions.act_window",
             "name": _("Facturas creadas desde RCV"),
             "res_model": "account.move",
             "view_mode": "tree,form",
+            "views": [
+                (self.env.ref("account.view_move_tree").id, "tree"),
+                (self.env.ref("account.view_move_form").id, "form"),
+            ],
             "domain": [("id", "in", created_moves.ids)],
-            "context": {"create": False},
+            "context": {
+                "create": False,
+                "default_move_type": (
+                    "out_invoice"
+                    if self.rcv_type == "sale"
+                    else "in_invoice"
+                ),
+            },
         }
 
     # =========================================================
@@ -105,6 +129,8 @@ class RcvBook(models.Model):
     def action_reconcile_with_accounting(self):
         for book in self:
             if not book.line_ids:
-                raise UserError(_("Este libro no tiene líneas para conciliar."))
+                raise UserError(
+                    _("Este libro no tiene líneas para conciliar.")
+                )
             book.state = "compared"
         return True
