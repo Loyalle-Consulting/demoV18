@@ -49,9 +49,13 @@ class RcvBook(models.Model):
     )
 
     # =========================================================
-    # ACCIÓN: CREAR FACTURAS (YA FUNCIONAL)
+    # ACCIÓN: CREAR FACTURAS (PROCESO PURO – SIN VISTAS)
     # =========================================================
     def action_create_invoices(self):
+        """
+        Crea facturas / notas de crédito desde las líneas RCV
+        que aún no tengan documento contable asociado.
+        """
         self.ensure_one()
 
         lines_to_invoice = self.line_ids.filtered(
@@ -63,38 +67,32 @@ class RcvBook(models.Model):
                 _("No existen líneas RCV pendientes de facturar.")
             )
 
-        created_moves = self.env["account.move"]
+        created = False
 
         for line in lines_to_invoice:
             move = line._create_account_move_from_rcv()
             if move:
-                created_moves |= move
+                created = True
 
-        if not created_moves:
-            raise UserError(_("No se creó ninguna factura nueva."))
+        if not created:
+            raise UserError(
+                _("No se creó ningún documento nuevo.")
+            )
 
+        # Estado final del libro
         self.state = "posted"
 
-        return {
-            "type": "ir.actions.act_window",
-            "name": _("Documentos creados desde RCV"),
-            "res_model": "account.move",
-            "view_mode": "tree,form",
-            "views": [
-                (self.env.ref("account.view_move_tree").id, "tree"),
-                (self.env.ref("account.view_move_form").id, "form"),
-            ],
-            "domain": [("id", "in", created_moves.ids)],
-            "context": {"create": False},
-        }
+        # 🔑 IMPORTANTE:
+        # No retornamos acciones de vista para evitar errores JS
+        return True
 
     # =========================================================
-    # ACCIÓN: CONCILIAR / REESTABLECER ESTADO (AJUSTADA)
+    # ACCIÓN: CONCILIAR / REESTABLECER ESTADO
     # =========================================================
     def action_reconcile_with_accounting(self):
         """
-        Si los documentos contables ya no existen,
-        se restablece el libro y sus líneas a estado importado.
+        - Si NO existen documentos contables → vuelve a IMPORTADO
+        - Si existen → estado COMPARADO
         """
         for book in self:
             if not book.line_ids:
@@ -102,20 +100,18 @@ class RcvBook(models.Model):
                     _("Este libro no tiene líneas para conciliar.")
                 )
 
-            # ¿Existen documentos contables reales?
-            existing_moves = book.line_ids.mapped("account_move_id").filtered(
-                lambda m: m.exists()
-            )
+            existing_moves = book.line_ids.mapped(
+                "account_move_id"
+            ).filtered(lambda m: m.exists())
 
             if not existing_moves:
-                # 🔁 RESTABLECER COMPLETAMENTE
+                # 🔁 Reproceso completo permitido
                 book.line_ids.write({
                     "account_move_id": False,
                     "match_state": "not_found",
                 })
                 book.state = "imported"
             else:
-                # Estado normal de conciliación
                 book.state = "compared"
 
         return True
