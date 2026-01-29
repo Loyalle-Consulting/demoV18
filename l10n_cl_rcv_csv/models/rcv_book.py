@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from odoo import models, fields, _
 from odoo.exceptions import UserError
 
@@ -51,7 +53,53 @@ class RcvBook(models.Model):
     )
 
     # =========================================================
-    # ACCIÓN: Conciliar con Contabilidad
+    # ACCIÓN: Crear facturas desde RCV (OPCIÓN A - CORRECTA)
+    # =========================================================
+    def action_create_invoices_from_rcv(self):
+        """
+        Crea facturas en Contabilidad Odoo desde las líneas RCV
+        que aún no tengan factura asociada.
+        """
+        self.ensure_one()
+
+        lines_to_invoice = self.line_ids.filtered(
+            lambda l: not l.account_move_id
+        )
+
+        if not lines_to_invoice:
+            raise UserError(
+                _("No existen líneas RCV pendientes de facturar.")
+            )
+
+        created_moves = self.env["account.move"]
+
+        for line in lines_to_invoice:
+            try:
+                move = line._create_account_move_from_rcv()
+                created_moves |= move
+            except UserError:
+                # Error funcional → se muestra tal cual
+                raise
+            except Exception as e:
+                raise UserError(
+                    _("Error al crear factura para folio %s:\n%s")
+                    % (line.folio, str(e))
+                )
+
+        # Actualizar estado del libro
+        self.state = "posted"
+
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Facturas creadas desde RCV"),
+            "res_model": "account.move",
+            "view_mode": "tree,form",
+            "domain": [("id", "in", created_moves.ids)],
+            "context": {"create": False},
+        }
+
+    # =========================================================
+    # ACCIÓN: Conciliar con Contabilidad (NO TOCAR)
     # =========================================================
     def action_reconcile_with_accounting(self):
         """
@@ -65,7 +113,6 @@ class RcvBook(models.Model):
             if not book.line_ids:
                 raise UserError(_("Este libro no tiene líneas para conciliar."))
 
-            # Por ahora solo marcamos estado como "compared"
             book.state = "compared"
 
         return True
