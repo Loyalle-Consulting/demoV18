@@ -125,14 +125,12 @@ class RcvLine(models.Model):
         # DETERMINAR TIPO DE MOVIMIENTO SEGÚN DTE
         # -------------------------------------------------
         if self.tipo_dte == "61":
-            # Nota de crédito
             move_type = (
                 "out_refund"
                 if self.book_id.rcv_type == "sale"
                 else "in_refund"
             )
         else:
-            # Factura
             move_type = (
                 "out_invoice"
                 if self.book_id.rcv_type == "sale"
@@ -180,7 +178,7 @@ class RcvLine(models.Model):
             "invoice_date": self.invoice_date,
             "date": self.accounting_date or self.invoice_date,
             "l10n_latam_document_type_id": latam_doc_type.id,
-            "l10n_latam_document_number": self.folio,
+            # ⚠️ NO se fuerza el número legal
             "ref": f"RCV DTE {self.tipo_dte} Folio {self.folio}",
             "invoice_line_ids": [
                 (0, 0, {
@@ -212,15 +210,9 @@ class RcvLine(models.Model):
         )
 
     def _get_tax_ids(self):
-        # DTE 34 = Exento
-        if self.tipo_dte == "34":
+        if self.tipo_dte in ("34", "61"):
             return self.env["account.tax"]
 
-        # DTE 61 normalmente NO lleva IVA
-        if self.tipo_dte == "61":
-            return self.env["account.tax"]
-
-        # IVA 19% Ventas
         return self.env["account.tax"].search(
             [
                 ("name", "ilike", "IVA"),
