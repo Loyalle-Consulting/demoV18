@@ -26,14 +26,22 @@
         <field name="arch" type="xml">
             <form string="Libro RCV">
                 <header>
-                    <!-- Botón SIN attrs (Odoo 18) -->
+
+                    <!-- FACTURAR DESDE EL LIBRO (OPCIÓN A) -->
+                    <button
+                        name="action_create_invoices"
+                        type="object"
+                        string="Crear facturas en Contabilidad"
+                        class="btn-primary"/>
+
+                    <!-- Conciliación futura -->
                     <button
                         name="action_reconcile_with_accounting"
                         type="object"
                         string="Conciliar con Contabilidad"
-                        class="btn-primary"/>
+                        class="btn-secondary"/>
 
-                    <!-- Statusbar permitido -->
+                    <!-- Estado -->
                     <field name="state"
                            widget="statusbar"
                            statusbar_visible="imported,compared,posted"/>
@@ -41,16 +49,31 @@
 
                 <sheet>
                     <group>
-                        <field name="company_id"/>
-                        <field name="year"/>
-                        <field name="month"/>
-                        <field name="rcv_type"/>
+                        <field name="company_id" readonly="1"/>
+                        <field name="year" readonly="1"/>
+                        <field name="month" readonly="1"/>
+                        <field name="rcv_type" readonly="1"/>
                         <field name="state" readonly="1"/>
                     </group>
 
                     <notebook>
                         <page string="Líneas RCV">
-                            <field name="line_ids"/>
+                            <!-- Vista embebida, solo lectura -->
+                            <field name="line_ids" readonly="1">
+                                <list>
+                                    <field name="tipo_dte"/>
+                                    <field name="folio"/>
+                                    <field name="invoice_date"/>
+                                    <field name="accounting_date"/>
+                                    <field name="partner_vat"/>
+                                    <field name="partner_name"/>
+                                    <field name="net_amount"/>
+                                    <field name="tax_amount"/>
+                                    <field name="total_amount"/>
+                                    <field name="match_state"/>
+                                    <field name="account_move_id"/>
+                                </list>
+                            </field>
                         </page>
                     </notebook>
                 </sheet>
