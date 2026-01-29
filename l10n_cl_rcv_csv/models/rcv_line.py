@@ -8,7 +8,6 @@ class RcvLine(models.Model):
     _name = "rcv.line"
     _description = "Línea RCV SII"
 
-    # 🔴 AJUSTE CLAVE: evitar pérdida de fechas al crear
     _order = "invoice_date asc nulls last, folio"
 
     # =====================================================
@@ -40,25 +39,17 @@ class RcvLine(models.Model):
         required=True,
     )
 
-    partner_vat = fields.Char(
-        string="RUT",
-    )
+    partner_vat = fields.Char(string="RUT")
+    partner_name = fields.Char(string="Razón Social")
 
-    partner_name = fields.Char(
-        string="Razón Social",
-    )
-
-    # 🔴 AJUSTE CLAVE: forzar persistencia explícita
     invoice_date = fields.Date(
         string="Fecha Documento",
-        help="Fecha Docto proveniente del CSV del SII",
         store=True,
         index=True,
     )
 
     accounting_date = fields.Date(
         string="Fecha Contable",
-        help="Fecha Recepción (fecha contable) del CSV del SII",
         store=True,
         index=True,
     )
@@ -83,7 +74,6 @@ class RcvLine(models.Model):
 
     currency_id = fields.Many2one(
         "res.currency",
-        string="Moneda",
         default=lambda self: self.env.company.currency_id,
         required=True,
     )
@@ -98,7 +88,6 @@ class RcvLine(models.Model):
             ("amount_diff", "Diferencia de monto"),
             ("created", "Factura creada"),
         ],
-        string="Estado Conciliación",
         default="not_found",
         required=True,
     )
@@ -110,58 +99,71 @@ class RcvLine(models.Model):
     )
 
     # =====================================================
-    # ACCIÓN: CREAR FACTURA (UNA LÍNEA)
+    # MÉTODO OFICIAL DE FACTURACIÓN (OPCIÓN A)
     # =====================================================
-    def action_create_invoice(self):
+    def _create_account_move_from_rcv(self):
         self.ensure_one()
 
         if self.account_move_id:
-            return
+            return self.account_move_id
 
-        partner = False
-        if self.partner_vat:
-            partner = self.env["res.partner"].search(
-                [("vat", "=", self.partner_vat)],
-                limit=1,
-            )
+        if not self.partner_vat:
+            raise UserError(_("La línea RCV no tiene RUT."))
+
+        partner = self.env["res.partner"].search(
+            [("vat", "=", self.partner_vat)],
+            limit=1,
+        )
 
         if not partner:
-            return self._open_create_invoice_wizard()
+            raise UserError(
+                _("No existe el contacto con RUT %s.") % self.partner_vat
+            )
 
-        if self.book_id.rcv_type == "sale":
-            move_type = "out_invoice"
-            journal_type = "sale"
-        else:
-            move_type = "in_invoice"
-            journal_type = "purchase"
+        # Tipo de movimiento
+        move_type = (
+            "out_invoice"
+            if self.book_id.rcv_type == "sale"
+            else "in_invoice"
+        )
 
+        # Diario
+        journal_type = "sale" if move_type == "out_invoice" else "purchase"
         journal = self.env["account.journal"].search(
             [
                 ("type", "=", journal_type),
-                ("company_id", "=", self.book_id.company_id.id),
+                ("company_id", "=", self.company_id.id),
             ],
             limit=1,
         )
 
         if not journal:
-            raise UserError(
-                _("No existe un diario contable configurado para %s.")
-                % ("Ventas" if journal_type == "sale" else "Compras")
-            )
+            raise UserError(_("No existe diario contable válido."))
+
+        # Tipo documento LATAM
+        latam_doc_type = self._get_latam_document_type()
+        if not latam_doc_type:
+            raise UserError(_("No se pudo determinar el tipo de DTE."))
+
+        # Impuestos
+        tax_ids = self._get_tax_ids()
 
         move = self.env["account.move"].create({
             "move_type": move_type,
-            "company_id": self.book_id.company_id.id,
+            "company_id": self.company_id.id,
             "partner_id": partner.id,
-            "invoice_date": self.invoice_date,
-            "date": self.accounting_date,
             "journal_id": journal.id,
+            "invoice_date": self.invoice_date,
+            "date": self.accounting_date or self.invoice_date,
+            "l10n_latam_document_type_id": latam_doc_type.id,
+            "l10n_latam_document_number": self.folio,
             "ref": f"RCV DTE {self.tipo_dte} Folio {self.folio}",
             "invoice_line_ids": [
                 (0, 0, {
-                    "name": f"DTE {self.tipo_dte or ''} Folio {self.folio}",
+                    "name": f"RCV DTE {self.tipo_dte} Folio {self.folio}",
                     "quantity": 1,
                     "price_unit": self.net_amount or 0.0,
+                    "tax_ids": [(6, 0, tax_ids.ids)],
                 })
             ],
         })
@@ -171,18 +173,38 @@ class RcvLine(models.Model):
         self.account_move_id = move.id
         self.match_state = "created"
 
+        return move
+
     # =====================================================
-    # WIZARD ASISTIDO
+    # HELPERS CHILE
     # =====================================================
-    def _open_create_invoice_wizard(self):
-        return {
-            "type": "ir.actions.act_window",
-            "name": _("Crear facturas desde RCV"),
-            "res_model": "rcv.create.move.wizard",
-            "view_mode": "form",
-            "target": "new",
-            "context": {
-                "active_ids": self.ids,
-                "active_model": "rcv.line",
-            },
-        }
+    def _get_latam_document_type(self):
+        return self.env["l10n_latam.document.type"].search(
+            [
+                ("code", "=", self.tipo_dte),
+                ("country_id.code", "=", "CL"),
+            ],
+            limit=1,
+        )
+
+    def _get_tax_ids(self):
+        # DTE 34 = Exento
+        if self.tipo_dte == "34":
+            return self.env["account.tax"]
+
+        # IVA 19% Ventas
+        return self.env["account.tax"].search(
+            [
+                ("name", "ilike", "IVA"),
+                ("type_tax_use", "=", "sale"),
+                ("company_id", "=", self.company_id.id),
+            ],
+            limit=1,
+        )
+
+    # =====================================================
+    # COMPATIBILIDAD (NO ROMPER)
+    # =====================================================
+    def action_create_invoice(self):
+        self.ensure_one()
+        return self._create_account_move_from_rcv()
