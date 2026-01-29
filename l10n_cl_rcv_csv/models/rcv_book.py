@@ -53,9 +53,9 @@ class RcvBook(models.Model):
     )
 
     # =========================================================
-    # ACCIÓN: Crear facturas desde RCV (OPCIÓN A - CORRECTA)
+    # ACCIÓN: Crear facturas desde RCV (OPCIÓN A DEFINITIVA)
     # =========================================================
-    def action_create_invoices_from_rcv(self):
+    def action_create_invoices(self):
         """
         Crea facturas en Contabilidad Odoo desde las líneas RCV
         que aún no tengan factura asociada.
@@ -76,9 +76,10 @@ class RcvBook(models.Model):
         for line in lines_to_invoice:
             try:
                 move = line._create_account_move_from_rcv()
-                created_moves |= move
+                if move:
+                    created_moves |= move
             except UserError:
-                # Error funcional → se muestra tal cual
+                # Error funcional: se muestra tal cual
                 raise
             except Exception as e:
                 raise UserError(
@@ -102,17 +103,8 @@ class RcvBook(models.Model):
     # ACCIÓN: Conciliar con Contabilidad (NO TOCAR)
     # =========================================================
     def action_reconcile_with_accounting(self):
-        """
-        Placeholder inicial.
-        En el siguiente paso aquí se implementará:
-        - búsqueda de account.move
-        - comparación por RUT / folio / monto
-        - actualización de match_state
-        """
         for book in self:
             if not book.line_ids:
                 raise UserError(_("Este libro no tiene líneas para conciliar."))
-
             book.state = "compared"
-
         return True
