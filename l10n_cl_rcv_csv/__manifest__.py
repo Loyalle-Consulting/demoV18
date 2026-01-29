@@ -18,13 +18,19 @@
         "security/ir.model.access.csv",
 
         # --------------------------------------------------
+        # MENÚ RAÍZ (SIEMPRE PRIMERO)
+        # --------------------------------------------------
+        "views/rcv_menu_views.xml",
+
+        # --------------------------------------------------
         # VISTAS BASE
         # --------------------------------------------------
         "views/rcv_book_views.xml",
         "views/rcv_line_views.xml",
 
         # --------------------------------------------------
-        # VISTAS CONSOLIDADAS (NUEVO)
+        # VISTAS CONSOLIDADAS
+        # (dependen del menú raíz)
         # --------------------------------------------------
         "views/rcv_line_consolidated_views.xml",
 
@@ -38,11 +44,6 @@
         # --------------------------------------------------
         "views/rcv_import_wizard_views.xml",
         "views/rcv_create_move_wizard_views.xml",
-
-        # --------------------------------------------------
-        # MENÚS (SIEMPRE AL FINAL)
-        # --------------------------------------------------
-        "views/rcv_menu_views.xml",
     ],
 
     "installable": True,
