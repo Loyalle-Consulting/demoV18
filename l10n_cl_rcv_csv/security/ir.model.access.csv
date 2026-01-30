@@ -1,6 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_rcv_book_user,access_rcv_book_user,model_rcv_book,base.group_user,1,1,1,0
-access_rcv_line_user,access_rcv_line_user,model_rcv_line,base.group_user,1,1,1,0
-access_rcv_import_wizard_user,access_rcv_import_wizard_user,model_rcv_import_wizard,base.group_user,1,1,1,0
-access_rcv_create_move_wizard_user,access_rcv_create_move_wizard_user,model_rcv_create_move_wizard,base.group_user,1,1,1,0
-access_rcv_csv_parser_user,access_rcv_csv_parser_user,model_rcv_csv_parser,base.group_user,1,0,0,0
+access_rcv_book_user,access_rcv_book_user,model_rcv_book,base.group_user,1,1,1,1
+access_rcv_line_user,access_rcv_line_user,model_rcv_line,base.group_user,1,1,1,1
+access_rcv_import_wizard_user,access_rcv_import_wizard_user,model_rcv_import_wizard,base.group_user,1,1,1,1
+access_rcv_create_move_wizard_user,access_rcv_create_move_wizard_user,model_rcv_create_move_wizard,base.group_user,1,1,1,1
+access_rcv_csv_parser_user,access_rcv_csv_parser_user,model_rcv_csv_parser,base.group_user,1,1,1,1
+
