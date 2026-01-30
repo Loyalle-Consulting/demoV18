@@ -170,7 +170,10 @@ class RcvImportWizard(models.TransientModel):
                     row.get("mntneto") or row.get("monto_neto")
                 ),
                 "tax_amount": self._to_float(
-                    row.get("iva") or row.get("monto_iva")
+                    row.get("iva")
+                    or row.get("monto_iva")
+                    or row.get("monto_iva_recuperable")
+                    or row.get("monto_iva_no_recuperable")
                 ),
                 "total_amount": self._to_float(
                     row.get("mnttotal") or row.get("monto_total")
