@@ -2,6 +2,7 @@
 
 from odoo import models, fields, _
 from odoo.exceptions import UserError
+from odoo import api
 
 
 class RcvLine(models.Model):
@@ -45,11 +46,35 @@ class RcvLine(models.Model):
     accounting_date = fields.Date(string="Fecha Contable", store=True)
 
     # =====================================================
-    # MONTOS
+    # MONTOS BASE (NO SE TOCAN)
     # =====================================================
     net_amount = fields.Monetary(string="Neto", currency_field="currency_id")
     tax_amount = fields.Monetary(string="IVA", currency_field="currency_id")
     total_amount = fields.Monetary(string="Total", currency_field="currency_id")
+
+    # =====================================================
+    # 🔑 MONTOS SIGNADOS (SOLO PARA CONSOLIDADOS / REPORTES)
+    # =====================================================
+    signed_net_amount = fields.Monetary(
+        string="Neto (signado)",
+        compute="_compute_signed_amounts",
+        store=True,
+        currency_field="currency_id",
+    )
+
+    signed_tax_amount = fields.Monetary(
+        string="IVA (signado)",
+        compute="_compute_signed_amounts",
+        store=True,
+        currency_field="currency_id",
+    )
+
+    signed_total_amount = fields.Monetary(
+        string="Total (signado)",
+        compute="_compute_signed_amounts",
+        store=True,
+        currency_field="currency_id",
+    )
 
     currency_id = fields.Many2one(
         "res.currency",
@@ -76,6 +101,17 @@ class RcvLine(models.Model):
         string="Documento Odoo",
         readonly=True,
     )
+
+    # =====================================================
+    # CÁLCULO DE SIGNO (DTE 61 RESTA)
+    # =====================================================
+    @api.depends("tipo_dte", "net_amount", "tax_amount", "total_amount")
+    def _compute_signed_amounts(self):
+        for rec in self:
+            sign = -1.0 if rec.tipo_dte == "61" else 1.0
+            rec.signed_net_amount = (rec.net_amount or 0.0) * sign
+            rec.signed_tax_amount = (rec.tax_amount or 0.0) * sign
+            rec.signed_total_amount = (rec.total_amount or 0.0) * sign
 
     # =====================================================
     # CREACIÓN DOCUMENTO CONTABLE
@@ -145,14 +181,18 @@ class RcvLine(models.Model):
             )
 
         # ---------------------------------------------
-        # IMPUESTOS (REGLA CORRECTA)
+        # IMPUESTOS
         # ---------------------------------------------
         tax_ids = []
         if self.tax_amount and self.tax_amount > 0:
             tax = self.env["account.tax"].search(
                 [
                     ("name", "ilike", "IVA"),
-                    ("type_tax_use", "=", "sale" if move_type.startswith("out_") else "purchase"),
+                    (
+                        "type_tax_use",
+                        "=",
+                        "sale" if move_type.startswith("out_") else "purchase",
+                    ),
                     ("company_id", "=", self.company_id.id),
                 ],
                 limit=1,
@@ -170,7 +210,6 @@ class RcvLine(models.Model):
             "journal_id": journal.id,
             "invoice_date": self.invoice_date,
             "date": self.accounting_date or self.invoice_date,
-            # 🔴 FOLIO REAL SII (ESTE ES EL IMPORTANTE)
             "l10n_latam_document_type_id": latam_doc_type.id,
             "l10n_latam_document_number": self.folio,
             "ref": f"RCV DTE {self.tipo_dte} Folio {self.folio}",
