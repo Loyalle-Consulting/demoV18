@@ -43,8 +43,12 @@
     </record>
 
     <!-- ================================================= -->
-    <!-- ACCIÓN: LIBRO VENTAS CONSOLIDADO -->
+    <!-- ACCIONES CONSOLIDADAS -->
+    <!-- YA DEFINIDAS EN OTRO ARCHIVO DEL MÓDULO            -->
+    <!-- SE COMENTAN AQUÍ PARA EVITAR DUPLICACIÓN           -->
     <!-- ================================================= -->
+
+    <!--
     <record id="action_rcv_sales_consolidated" model="ir.actions.act_window">
         <field name="name">Libro Ventas (Consolidado)</field>
         <field name="res_model">rcv.line</field>
@@ -58,9 +62,6 @@
         </field>
     </record>
 
-    <!-- ================================================= -->
-    <!-- ACCIÓN: LIBRO COMPRAS CONSOLIDADO -->
-    <!-- ================================================= -->
     <record id="action_rcv_purchases_consolidated" model="ir.actions.act_window">
         <field name="name">Libro Compras (Consolidado)</field>
         <field name="res_model">rcv.line</field>
@@ -73,11 +74,15 @@
             }
         </field>
     </record>
+    -->
 
     <!-- ================================================= -->
     <!-- MENÚS -->
+    <!-- YA DEFINIDOS EN OTRO ARCHIVO DEL MÓDULO            -->
+    <!-- SE COMENTAN AQUÍ PARA EVITAR DUPLICACIÓN           -->
     <!-- ================================================= -->
 
+    <!--
     <menuitem id="menu_rcv_sales_consolidated"
               name="Libro Ventas (Consolidado)"
               parent="l10n_cl_rcv_csv.menu_rcv_root"
@@ -89,5 +94,6 @@
               parent="l10n_cl_rcv_csv.menu_rcv_root"
               action="action_rcv_purchases_consolidated"
               sequence="40"/>
+    -->
 
 </odoo>
