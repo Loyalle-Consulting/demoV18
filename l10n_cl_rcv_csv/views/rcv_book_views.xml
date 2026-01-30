@@ -68,6 +68,7 @@
                                     <field name="partner_vat"/>
                                     <field name="partner_name"/>
                                     <field name="net_amount"/>
+                                    <field name="signed_exempt_amount" string="Exento"/>
                                     <field name="tax_amount"/>
                                     <field name="total_amount"/>
                                     <field name="match_state"/>
