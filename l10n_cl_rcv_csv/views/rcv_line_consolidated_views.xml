@@ -29,10 +29,10 @@
                 <field name="partner_vat" string="RUT"/>
                 <field name="partner_name" string="Razón Social"/>
 
-                <!-- Montos -->
-                <field name="net_amount" string="Neto" sum="Total Neto"/>
-                <field name="tax_amount" string="IVA" sum="Total IVA"/>
-                <field name="total_amount" string="Total" sum="Total General"/>
+                <!-- Montos (SIGNADOS: DTE 61 RESTA) -->
+                <field name="signed_net_amount" string="Neto" sum="Total Neto"/>
+                <field name="signed_tax_amount" string="IVA" sum="Total IVA"/>
+                <field name="signed_total_amount" string="Total" sum="Total General"/>
 
                 <!-- Estado -->
                 <field name="match_state" string="Estado"/>
