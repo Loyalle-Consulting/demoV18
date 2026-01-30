@@ -76,6 +76,14 @@ class RcvLine(models.Model):
         currency_field="currency_id",
     )
 
+    # 👉 NUEVO: MONTO EXENTO PARA DTE 34
+    signed_exempt_amount = fields.Monetary(
+        string="Exento",
+        compute="_compute_signed_amounts",
+        store=True,
+        currency_field="currency_id",
+    )
+
     currency_id = fields.Many2one(
         "res.currency",
         default=lambda self: self.env.company.currency_id,
@@ -104,14 +112,22 @@ class RcvLine(models.Model):
 
     # =====================================================
     # CÁLCULO DE SIGNO (DTE 61 RESTA)
+    # + EXENTO PARA DTE 34
     # =====================================================
     @api.depends("tipo_dte", "net_amount", "tax_amount", "total_amount")
     def _compute_signed_amounts(self):
         for rec in self:
             sign = -1.0 if rec.tipo_dte == "61" else 1.0
+
             rec.signed_net_amount = (rec.net_amount or 0.0) * sign
             rec.signed_tax_amount = (rec.tax_amount or 0.0) * sign
             rec.signed_total_amount = (rec.total_amount or 0.0) * sign
+
+            # ✔ FACTURA EXENTA (DTE 34)
+            if rec.tipo_dte == "34":
+                rec.signed_exempt_amount = (rec.total_amount or 0.0) * sign
+            else:
+                rec.signed_exempt_amount = 0.0
 
     # =====================================================
     # CREACIÓN DOCUMENTO CONTABLE
